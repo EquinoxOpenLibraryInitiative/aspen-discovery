@@ -514,6 +514,10 @@ class BookCoverProcessor {
 		if (!is_null($this->isn) || !is_null($this->upc) || !is_null($this->issn)) {
 			$this->log("Looking for picture based on isbn and upc.", Logger::LOG_NOTICE);
 
+			if ($this->chilifresh()) {
+				return true;
+			}
+
 			//TODO: Allow these to be sorted
 			require_once ROOT_DIR . '/sys/Enrichment/SyndeticsSetting.php';
 			$syndeticsSettings = new SyndeticsSetting();
@@ -854,6 +858,30 @@ class BookCoverProcessor {
 			$this->log("Could not load the file as an image $url", Logger::LOG_NOTICE);
 			return false;
 		}
+	}
+
+	function chilifresh() {
+		if (is_null($this->isn) && is_null($this->upc) && is_null($this->issn)) {
+			return false;
+		}
+		switch ($this->size) {
+			case 'small':
+				$size = 'S';
+				break;
+			case 'medium':
+				$size = 'M';
+				break;
+			case 'large':
+				$size = 'L';
+				break;
+			default:
+				$size = 'S';
+		}
+
+		$url = "https://content.chilifresh.com/?size={$size}&isbn=";
+		$url .= implode(',', array_filter([$this->isn, $this->issn, $this->upc]));
+		$this->log("Chilifresh URL: $url", Logger::LOG_DEBUG);
+		return $this->processImageURL('chilifresh', $url, true);
 	}
 
 	function syndetics($key) {
