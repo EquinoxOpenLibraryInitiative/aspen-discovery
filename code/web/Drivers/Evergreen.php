@@ -1897,8 +1897,8 @@ class Evergreen extends AbstractIlsDriver {
 		}
 	}
 
-    function updatePin(User $user, string $oldPin, string $newPin) {
-        if ($user->cat_password != $oldPin) {
+    function updatePin(User $patron, string $oldPin, string $newPin) {
+        if ($patron->cat_password != $oldPin) {
             return [
                 'success' => false,
                 'message' => "The old password provided is incorrect.",
@@ -1912,7 +1912,7 @@ class Evergreen extends AbstractIlsDriver {
             ]),
         ];
 
-        $authToken = $this->getAPIAuthToken($user, false);
+        $authToken = $this->getAPIAuthToken($patron, false);
 
         $evergreenUrl = $this->accountProfile->patronApiUrl . '/osrf-gateway-v1';
         $headers = array(
@@ -1935,8 +1935,6 @@ class Evergreen extends AbstractIlsDriver {
                         'text' => 'The old password provided is incorrect',
                         'isPublicFacing' => true,
                     ]);
-                } else {
-                    // ...Something else!
                 }
             } elseif ($apiResponse->payload[0] == 1) {
                 $result['error'] = null;
