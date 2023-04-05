@@ -1753,7 +1753,7 @@ class Evergreen extends AbstractIlsDriver {
 			global $interface;
 			$interface->assign('resendEmail', true);
 		}
-		return 'evergreenEmailResetPinLink.tpl';
+		return 'kohaEmailResetPinLink.tpl';
 	}
 
 	function processEmailResetPinForm() {
