@@ -1788,7 +1788,7 @@ class Evergreen extends AbstractIlsDriver {
 										'text' => 'The email address you supplied does not match the address known to the library. Please try again',
 										'isPublicFacing' => true,
 										]);
-				 elseif ($errorCode == 'ACTOR_USER_NOT_FOUND') {
+				 } elseif ($errorCode == 'ACTOR_USER_NOT_FOUND') {
 					$result['error'] = translate([
 										'text' => 'Unable to find your record. Please try again',
 										'isPublicFacing' => true,
