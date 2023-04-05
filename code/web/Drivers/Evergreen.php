@@ -1753,7 +1753,7 @@ class Evergreen extends AbstractIlsDriver {
 			global $interface;
 			$interface->assign('resendEmail', true);
 		}
-		return 'kohaEmailResetPinLink.tpl';
+		return 'ilsEmailResetPinLink.tpl';
 	}
 
 	private function _requestPasswordReset($identType, $identValue, $email) {
@@ -1837,7 +1837,7 @@ class Evergreen extends AbstractIlsDriver {
 			$pinValidationRules = $this->getPasswordPinValidationRules();
 			$interface->assign('pinValidationRules', $pinValidationRules);
 
-			return 'kohaPasswordRecovery.tpl';
+			return 'ilsPasswordRecovery.tpl';
 		} else {
 			//No key provided, go back to the starting point
 			header('Location: /MyAccount/EmailResetPin');
@@ -1887,7 +1887,7 @@ class Evergreen extends AbstractIlsDriver {
 					$error = null;
 				}
 				$interface->assign('error', $error);
-				return 'kohaPasswordRecoveryResult.tpl';
+				return 'ilsPasswordRecoveryResult.tpl';
 			} else {
 				//No key provided, go back to the starting point
 				header('Location: /MyAccount/EmailResetPin');

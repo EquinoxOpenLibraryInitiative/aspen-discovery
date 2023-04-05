@@ -3124,7 +3124,7 @@ class Koha extends AbstractIlsDriver {
 			global $interface;
 			$interface->assign('resendEmail', true);
 		}
-		return 'kohaEmailResetPinLink.tpl';
+		return 'ilsEmailResetPinLink.tpl';
 	}
 
 	function getSelfRegistrationFields($type = 'selfReg') {
@@ -5922,7 +5922,7 @@ class Koha extends AbstractIlsDriver {
 			$pinValidationRules = $this->getPasswordPinValidationRules();
 			$interface->assign('pinValidationRules', $pinValidationRules);
 
-			return 'kohaPasswordRecovery.tpl';
+			return 'ilsPasswordRecovery.tpl';
 		} else {
 			//No key provided, go back to the starting point
 			header('Location: /MyAccount/EmailResetPin');
@@ -5974,7 +5974,7 @@ class Koha extends AbstractIlsDriver {
 			}
 
 			$interface->assign('error', $error);
-			return 'kohaPasswordRecoveryResult.tpl';
+			return 'ilsPasswordRecoveryResult.tpl';
 		} else {
 			//No key provided, go back to the starting point
 			header('Location: /MyAccount/EmailResetPin');
