@@ -1810,11 +1810,10 @@ class Evergreen extends AbstractIlsDriver {
 										'text' => 'Unable to find your record. Please try again',
 										'isPublicFacing' => true,
 										]);
-				} else {
-					// fall back to the default error response, as the
-					// other errors that can happen here likely signify
-					// that somebody is trying to abuse the reset API
 				}
+				// if we get here, fall back to the default error response, as the
+				// other errors that can happen likely signify
+				// that somebody is trying to abuse the reset API
 			} elseif ($apiResponse->payload[0] == 1) {
 				$result['error'] = null;
 				$result['success'] = true;
@@ -1895,6 +1894,7 @@ class Evergreen extends AbstractIlsDriver {
 				die();
 			}
 		}
+        return null;
 	}
 
     function updatePin(User $patron, string $oldPin, string $newPin) {
