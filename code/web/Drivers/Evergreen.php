@@ -1756,6 +1756,21 @@ class Evergreen extends AbstractIlsDriver {
 		return 'kohaEmailResetPinLink.tpl';
 	}
 
+	private function _requestPasswordReset($identType, $identValue, $email) {
+		$evergreenUrl = $this->accountProfile->patronApiUrl . '/osrf-gateway-v1';
+		$headers = array(
+			'Content-Type: application/x-www-form-urlencoded',
+		);
+		$this->apiCurlWrapper->addCustomHeaders($headers, false);
+
+		$request = 'service=open-ils.actor&method=open-ils.actor.patron.password_reset.request';
+		$request .= '&param=' . json_encode($identType);
+		$request .= '&param=' . json_encode($identValue);
+		$request .= '&param=' . json_encode($email);
+
+		return $this->apiCurlWrapper->curlPostPage($evergreenUrl, $request);
+	}
+
 	function processEmailResetPinForm() {
 		$result = [
 			'success' => false,
@@ -1765,22 +1780,24 @@ class Evergreen extends AbstractIlsDriver {
 						]),
 		];
 
-		$evergreenUrl = $this->accountProfile->patronApiUrl . '/osrf-gateway-v1';
-		$headers = array(
-			'Content-Type: application/x-www-form-urlencoded',
-		);
-		$this->apiCurlWrapper->addCustomHeaders($headers, false);
-		$username = strip_tags($_REQUEST['username']);
+		$patronIdentifier = strip_tags($_REQUEST['username']);
 		$email = strip_tags($_REQUEST['email']);
-		$request = 'service=open-ils.actor&method=open-ils.actor.patron.password_reset.request';
-		$request .= '&param=' . json_encode('barcode');
-		$request .= '&param=' . json_encode($username);
-		$request .= '&param=' . json_encode($email);
+		$apiResponse = $this->_requestPasswordReset('barcode', $patronIdentifier, $email);
 
-		$apiResponse = $this->apiCurlWrapper->curlPostPage($evergreenUrl, $request);
+		if ($this->apiCurlWrapper->getResponseCode() !== 200) {
+			return $result;
+		}
 
-		if ($this->apiCurlWrapper->getResponseCode() == 200){
+		$apiResponse = json_decode($apiResponse);
+
+		// first check to see if we need to retry the patron lookup by username
+		if (isset($apiResponse->payload[0]) && isset($apiResponse->payload[0]->textcode) &&
+			$apiResponse->payload[0]->textcode == 'ACTOR_USER_NOT_FOUND') {
+			$apiResponse = $this->_requestPasswordReset('username', $patronIdentifier, $email);
 			$apiResponse = json_decode($apiResponse);
+		}
+
+		if ($this->apiCurlWrapper->getResponseCode() == 200) {
 			if (isset($apiResponse->payload[0]) && isset($apiResponse->payload[0]->textcode)){
 				$errorCode = $apiResponse->payload[0]->textcode;
 				if ($errorCode == 'EMAIL_VERIFICATION_FAILED') {
