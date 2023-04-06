@@ -219,6 +219,9 @@ Title:
       - [and, 50]
     - series2:
       - [and, 30]
+    - title_full:
+      - [onephrase, 500]
+      - [and, 200]
 
 TitleProper:
   QueryFields:
