@@ -36,6 +36,36 @@ function getUpdates23_03_00(): array {
 				"UPDATE account_profiles SET iiiLoginConfiguration = loginConfiguration WHERE ils IN ('millennium', 'sierra')"
 			],
 		],
+		'move_includePersonalAndCorporateNamesInTopics' => [
+			'title' => 'Move Include Personal And Corporate Names In Topics',
+			'description' => 'Add includePersonalAndCorporateNamesInTopics to System Variables',
+			'continueOnError' => true,
+			'sql' => [
+				"ALTER TABLE indexing_profiles ADD COLUMN includePersonalAndCorporateNamesInTopics TINYINT(1) NOT NULL DEFAULT 1;",
+				"ALTER TABLE sideloads ADD COLUMN includePersonalAndCorporateNamesInTopics TINYINT(1) NOT NULL DEFAULT 1;",
+				"UPDATE indexing_profiles set includePersonalAndCorporateNamesInTopics = (SELECT includePersonalAndCorporateNamesInTopics from system_variables)",
+				"UPDATE sideloads set includePersonalAndCorporateNamesInTopics = (SELECT includePersonalAndCorporateNamesInTopics from system_variables)",
+				"ALTER TABLE system_variables DROP COLUMN includePersonalAndCorporateNamesInTopics",
+			]
+		], //includePersonalAndCorporateNamesInTopics
+		'assign_novelist_settings_to_libraries' => [
+			'title' => 'Assign Novelist Settings to Libraries',
+			'description' => 'Assign Novelist Settings to Libraries',
+			'continueOnError' => true,
+			'sql' => [
+				"ALTER TABLE library ADD COLUMN novelistSettingId INT(11) DEFAULT -1",
+				"UPDATE library set novelistSettingId = IFNULL((SELECT id from novelist_settings LIMIT 0, 1), -1)",
+			]
+		],
+		'update_indexes_for_grouped_works' => [
+			'title' => 'Update Indexes for Grouped Works for indexing performance',
+			'description' => 'Add indexAfter',
+			'continueOnError' => true,
+			'sql' => [
+				"ALTER TABLE grouped_work DROP INDEX permanent_id_2",
+				"ALTER TABLE grouped_work_scheduled_index ADD INDEX permanent_id_with_date(permanent_id, indexAfter)",
+			]
+		],
 
 		//kirstien
 		'add_ldap_to_sso' => [
@@ -246,7 +276,21 @@ function getUpdates23_03_00(): array {
 			]
 		],
 		//add_sso_mapping_constraints
-
+		'add_donation_notification_fields' => [
+			'title' => 'Add columns to store donation notification information',
+			'description' => 'Add columns to store donation notification information',
+			'continueOnError' => true,
+			'sql' => [
+				'ALTER TABLE donations ADD COLUMN shouldBeNotified TINYINT(1) DEFAULT 0',
+				'ALTER TABLE donations ADD COLUMN notificationFirstName VARCHAR(75) DEFAULT null',
+				'ALTER TABLE donations ADD COLUMN notificationLastName VARCHAR(75) DEFAULT null',
+				'ALTER TABLE donations ADD COLUMN notificationAddress VARCHAR(75) DEFAULT null',
+				'ALTER TABLE donations ADD COLUMN notificationCity VARCHAR(75) DEFAULT null',
+				'ALTER TABLE donations ADD COLUMN notificationState VARCHAR(75) DEFAULT null',
+				'ALTER TABLE donations ADD COLUMN notificationZip VARCHAR(75) DEFAULT null',
+			],
+		],
+		//add_donation_notification_fields
 
 		//kodi
 		'google_bucket' => [

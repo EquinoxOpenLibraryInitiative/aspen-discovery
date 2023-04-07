@@ -47,6 +47,9 @@ abstract class Action
 
 	function loadAccountSidebarVariables(){
 		global $interface;
+		$twoFactor = UserAccount::has2FAEnabledForPType();
+		$interface->assign('twoFactorEnabled', $twoFactor);
+
 		// Check to see what sidebar sections to display, if any
 		$showUserCirculationModules = $interface->getVariable('showUserCirculationModules');
 		$showCurbsidePickups = $interface->getVariable('showCurbsidePickups');
@@ -62,6 +65,7 @@ abstract class Action
 		$twoFactorEnabled = $interface->getVariable('twoFactorEnabled');
 		$allowPinReset = $interface->getVariable('allowPinReset');
 		$userIsStaff = $interface->getVariable('userIsStaff');
+		$showSaveEvents = $interface->getVariable('hasEventSettings');
 
 		$user = UserAccount::getLoggedInUser();
 
@@ -103,7 +107,9 @@ abstract class Action
 		global $usageByIPAddress;
 		try{
 			$usageByIPAddress->numBlockedApiRequests++;
-			$usageByIPAddress->update();
+			if (SystemVariables::getSystemVariables()->trackIpAddresses) {
+				$usageByIPAddress->update();
+			}
 		} catch (Exception $e) {
 			//Table does not exist yet
 		}

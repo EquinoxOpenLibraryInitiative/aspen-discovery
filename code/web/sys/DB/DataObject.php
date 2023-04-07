@@ -71,6 +71,14 @@ abstract class DataObject {
 		return [];
 	}
 
+	public function unsetUniquenessFields() {
+		foreach ($this->getUniquenessFields() as $index => $field) {
+			unset($this->$field);
+		}
+		$primaryKey = $this->getPrimaryKey();
+		unset($this->$primaryKey);
+	}
+
 	function __toString() {
 		$stringProperty = $this->__primaryKey;
 		if ($this->__displayNameColumn != null) {
@@ -1067,7 +1075,7 @@ abstract class DataObject {
 					return false;
 				}
 			}
-		} else {
+		} else if ($overrideExisting != 'doNotSave') {
 			$result = $this->update();
 			if ($result === false) {
 				return false;
@@ -1146,4 +1154,9 @@ abstract class DataObject {
 	public function getAdditionalListJavascriptActions(): array {
 		return [];
 	}
+
+	public function prepareForSharingToCommunity() {
+		$this->unsetUniquenessFields();
+	}
+
 }

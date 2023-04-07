@@ -22,7 +22,7 @@
 					<div id="myAccountPanel" class="panel-collapse collapse in">
 						<div class="panel-body">
 							{if empty($offline)}
-								<span class="expirationFinesNotice-placeholder"></span>
+								<span class="expirationNotice-placeholder"></span>
 							{/if}
 							{if !empty($userHasCatalogConnection) && (!$offline || $enableEContentWhileOffline) && $showUserCirculationModules}
 								<div class="myAccountLink">
@@ -129,7 +129,7 @@
 									{/if}
 									{if !empty($showFines)}
 										<div class="myAccountLink" title="Fines">
-											<a href="/MyAccount/Fines">{translate text='Fines' isPublicFacing=true}</a>
+											<a href="/MyAccount/Fines">{translate text='Fines' isPublicFacing=true} <span class="finesBadge-placeholder"><span class="badge">??</span></span></a>
 										</div>
 									{/if}
 								{/if}
@@ -173,6 +173,9 @@
 								{if !empty($enableSavedSearches)}
 									{* Only highlight saved searches as active if user is logged in: *}
 									<div class="myAccountLink"><a href="/Search/History?require_login">{translate text='Your Searches' isPublicFacing=true}</a> <span class="label badge-updated newSavedSearchBadge" style="display: none"><span class="saved-searches-placeholder">??</span></span></div>
+								{/if}
+								{if $hasEventSettings}
+									<div class="myAccountLink"><a href="/MyAccount/MyEvents">{translate text='Your Events' isPublicFacing=true}</a></div>
 								{/if}
 								{if !empty($enableReadingHistory) && $userHasCatalogConnection}
 									<div class="myAccountLink">
@@ -247,7 +250,8 @@
 			{if !empty($allowMasqueradeMode) && !$masqueradeMode}
 				{if !empty($canMasquerade)}
 					<div>
-						<div class="myAccountLink btn btn-default btn-sm btn-block"><a onclick="AspenDiscovery.Account.getMasqueradeForm();" href="#">{translate text="Masquerade" isPublicFacing=true}</a></div>
+						<div class="myAccountLink">
+						<a class="btn btn-default btn-sm btn-block" onclick="AspenDiscovery.Account.getMasqueradeForm();" href="#">{translate text="Masquerade" isPublicFacing=true}</a></div>
 					</div>
 				{/if}
 			{/if}

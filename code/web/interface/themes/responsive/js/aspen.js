@@ -4620,6 +4620,9 @@ var AspenDiscovery = (function(){
 			var modalDialog = $("#modalDialog");
 			if (modalDialog.is(":visible")){
 				modalDialog.modal('hide');
+				$('.modal-body').html("Loading...");
+				$(".modal-title").text("Loading...");
+
 				if (callback !== undefined){
 					modalDialog.on('hidden.bs.modal', function (e) {
 						modalDialog.off('hidden.bs.modal');
@@ -5229,6 +5232,42 @@ var AspenDiscovery = (function(){
 				// Increase the '10' value to get a smoother/slower scroll!
 				window.scrollTo(0, c - c / 10);
 			}
+		},
+
+		showDisplaySettings: function () {
+			var url = Globals.path + "/AJAX/JSON?method=getDisplaySettingsForm";
+			$.getJSON(url, function(data){
+				AspenDiscovery.showMessageWithButtons(data.title, data.modalBody, data.modalButtons);
+			}).fail(AspenDiscovery.ajaxFail);
+			return false;
+		},
+
+		updateDisplaySettings: function () {
+			var preferredLanguage = $("#preferredLanguage option:selected").val();
+			var preferredTheme = $("#preferredTheme option:selected").val();
+			var url = Globals.path + "/AJAX/JSON";
+			var params =  {
+				method : 'updateDisplaySettings',
+				preferredLanguage : preferredLanguage,
+				preferredTheme: preferredTheme
+			};
+			$.getJSON(url, params,
+				function(data) {
+					if (data.success) {
+						if (data.message.length > 0){
+							//User was logged in, show a message about how to update
+							AspenDiscovery.showMessage('Success', data.message, true, true);
+						}else{
+							//Refresh the page
+							// noinspection SillyAssignmentJS
+							window.location.href = window.location.href;
+						}
+					} else {
+						AspenDiscovery.showMessage("Error", data.message);
+					}
+				}
+			).fail(AspenDiscovery.ajaxFail);
+			return false;
 		}
 	}
 
@@ -5611,6 +5650,7 @@ AspenDiscovery.Account = (function () {
 		loadMenuData: function () {
 			var totalCheckouts = 0;
 			var totalHolds = 0;
+			var totalFines = 0;
 			if (Globals.hasILSConnection) {
 				var ilsUrl = Globals.path + "/MyAccount/AJAX?method=getMenuDataIls&activeModule=" + Globals.activeModule + '&activeAction=' + Globals.activeAction;
 				$.getJSON(ilsUrl, function (data) {
@@ -5644,7 +5684,8 @@ AspenDiscovery.Account = (function () {
 						}
 
 						$(".materialsRequests-placeholder").html(summary.materialsRequests);
-						$(".expirationFinesNotice-placeholder").html(summary.expirationFinesNotice);
+						$(".expirationNotice-placeholder").html(summary.expirationNotice);
+						$(".finesBadge-placeholder").html(summary.finesBadge);
 					}
 				});
 			}
@@ -5810,6 +5851,9 @@ AspenDiscovery.Account = (function () {
 						}
 						if (multiStep !== 'true') {
 							window.location.replace(referer);
+						} else {
+							$('.modal-body').html("Loading...");
+							$(".modal-title").text("Loading...");
 						}
 					} else if (response.result.success === false && response.result.passwordExpired === true) {
 						AspenDiscovery.showMessageWithButtons(response.result.title, response.result.body, response.result.buttons);
@@ -6590,6 +6634,13 @@ AspenDiscovery.Account = (function () {
 				params.dedicationType = $(finesFormId + " input[name=dedicationType]:checked").val();
 				params.honoreeFirstName = $(finesFormId + " input[name=honoreeFirstName]").val();
 				params.honoreeLastName = $(finesFormId + " input[name=honoreeLastName]").val();
+				params.shouldBeNotified = $(finesFormId + " input[name=shouldBeNotified]:checked").val();
+				params.notificationFirstName = $(finesFormId + " input[name=notificationFirstName]").val();
+				params.notificationLastName = $(finesFormId + " input[name=notificationLastName]").val();
+				params.notificationAddress = $(finesFormId + " input[name=notificationAddress]").val();
+				params.notificationCity = $(finesFormId + " input[name=notificationCity]").val();
+				params.notificationState = $(finesFormId + " input[name=notificationState]").val();
+				params.notificationZip = $(finesFormId + " input[name=notificationZip]").val();
 				params.firstName = $(finesFormId + " input[name=firstName]").val();
 				params.lastName = $(finesFormId + " input[name=lastName]").val();
 				params.isAnonymous = $(finesFormId + " input[name=makeAnonymous]:checked").val();
@@ -6636,6 +6687,8 @@ AspenDiscovery.Account = (function () {
 						} else if (paymentType === 'ACI') {
 							orderInfo = response.paymentId;
 						} else if (paymentType === 'InvoiceCloud') {
+							orderInfo = response.paymentRequestUrl;
+						} else if (paymentType === 'CertifiedPaymentsByDeluxe') {
 							orderInfo = response.paymentRequestUrl;
 						}
 					}
@@ -6736,6 +6789,16 @@ AspenDiscovery.Account = (function () {
 				window.location.href = url;
 			}
 		},
+
+		createCertifiedPaymentsByDeluxeOrder: function (finesFormId, transactionType, remittanceId) {
+			var url = this.createGenericOrder(finesFormId, 'CertifiedPaymentsByDeluxe', transactionType, remittanceId);
+			if (url === false) {
+				// Do nothing; there was an error that should be displayed
+			} else {
+				window.location.href = url;
+			}
+		},
+
 		completePayPalOrder: function (orderId, patronId, transactionType) {
 			var url = Globals.path + "/MyAccount/AJAX";
 			var params = {
@@ -6892,6 +6955,99 @@ AspenDiscovery.Account = (function () {
 				}
 			}
 		},
+
+		saveEvent: function (trigger, source, id) {
+			if (Globals.loggedIn) {
+				var url = Globals.path + "/MyAccount/AJAX";
+				var params = {
+					'method': 'saveEvent',
+					sourceId: id,
+					source: source
+				};
+				// noinspection JSUnresolvedFunction
+				$.getJSON(url, params, function (data) {
+					if (data.success) {
+						AspenDiscovery.showMessage("Added Successfully", data.message, 2000); // auto-close after 2 seconds.
+					} else {
+						AspenDiscovery.showMessage("Error", data.message);
+					}
+				}).fail(AspenDiscovery.ajaxFail);
+			}
+			return false;
+		},
+
+		saveEventReg: function (trigger, source, id, regLink) {
+			if (Globals.loggedIn) {
+				var url = Globals.path + "/MyAccount/AJAX";
+				var params = {
+					'method': 'saveEvent',
+					sourceId: id,
+					source: source,
+					regLink: regLink
+				};
+				// noinspection JSUnresolvedFunction
+				$.getJSON(url, params, function (data) {
+					if (data.success) {
+						AspenDiscovery.showMessage("Added Successfully", data.message, 2000); // auto-close after 2 seconds.
+						window.open(regLink, "_blank");
+					} else {
+						AspenDiscovery.showMessage("Error", data.message);
+					}
+				}).fail(AspenDiscovery.ajaxFail);
+			}
+			return false;
+		},
+
+		deleteSavedEvent: function(id){
+			if (confirm("Are you sure you want to remove this event?")){
+				var url = Globals.path + '/MyAccount/AJAX?method=deleteSavedEvent&id=' + id ;
+				$.getJSON(url, function(data){
+					if (data.result === true){
+						AspenDiscovery.showMessage('Success', data.message, true);
+					}else{
+						AspenDiscovery.showMessage('Sorry', data.message);
+					}
+				});
+			}
+			return false;
+		},
+
+		loadEvents: function (page, filter) {
+			var url = Globals.path + "/MyAccount/AJAX?method=getSavedEvents";
+			if (page !== undefined) {
+				url += "&page=" + page;
+			} else {
+				page = 1;
+			}
+			if (filter !== undefined) {
+				url += "&eventsFilter=" + filter;
+			}
+			var stateObj = {
+				page: 'MyEvents',
+				pageNumber: page,
+				readingHistoryFilter: filter
+			};
+			var newUrl = AspenDiscovery.buildUrl(document.location.origin + document.location.pathname, 'page', page);
+			if (filter !== undefined) {
+				newUrl = AspenDiscovery.buildUrl(newUrl, 'eventsFilter', filter);
+			}
+			if (document.location.href) {
+				var label = 'My Events page '.page;
+				history.pushState(stateObj, label, newUrl);
+			}
+			document.body.style.cursor = "wait";
+			// noinspection JSUnresolvedFunction
+			$.getJSON(url, function (data) {
+				document.body.style.cursor = "default";
+				if (data.success) {
+					$("#myEventsPlaceholder").html(data.myEvents);
+				} else {
+					$("#myEventsPlaceholder").html(data.message);
+				}
+			}).fail(AspenDiscovery.ajaxFail);
+			return false;
+		},
+
 		showSaveToListForm: function (trigger, source, id) {
 			if (Globals.loggedIn) {
 				AspenDiscovery.loadingMessage();
@@ -8707,11 +8863,11 @@ AspenDiscovery.Admin = (function () {
 				$("#propertyRowsourceCourseReserveId").hide();
 			}
 		},
-		updateGroupedWorkDisplayFields: function() {
+		updateGroupedWorkDisplayFields: function () {
 			var showSearchTools = $('#showSearchTools');
-			if(showSearchTools.is(":checked")) {
+			if (showSearchTools.is(":checked")) {
 				$("#propertyRowshowSearchToolsAtTop").show();
-			}else {
+			} else {
 				$("#propertyRowshowSearchToolsAtTop").hide();
 			}
 		},
@@ -9050,7 +9206,7 @@ AspenDiscovery.Admin = (function () {
 				$('#propertyRowssoMetadataFilename').show();
 			}
 		},
-		toggleSamlUserIdFields: function() {
+		toggleSamlUserIdFields: function () {
 			var userIdOption = $('#ssoUseGivenUserId');
 			if (userIdOption.is(":checked")) {
 				$('#propertyRowssoIdAttr').show();
@@ -9065,7 +9221,7 @@ AspenDiscovery.Admin = (function () {
 				}
 			});
 		},
-		toggleSamlUsernameFormatFields: function() {
+		toggleSamlUsernameFormatFields: function () {
 			var usernameFormat = $('#ssoUseGivenUsername');
 			if (usernameFormat.is(":checked")) {
 				$('#propertyRowssoUsernameAttr').show();
@@ -9118,7 +9274,7 @@ AspenDiscovery.Admin = (function () {
 				$(".adminSection").show();
 			} else {
 				var allAdminSections = $(".adminSection");
-				allAdminSections.each(function (){
+				allAdminSections.each(function () {
 					var curSection = $(this);
 					var sectionLabel = curSection.find(".adminSectionLabel");
 					var adminSectionLabel = sectionLabel.text();
@@ -9126,9 +9282,9 @@ AspenDiscovery.Admin = (function () {
 					if (searchRegex.test(adminSectionLabel)) {
 						curSection.show();
 						actionsInSection.show();
-					}else {
+					} else {
 						var numVisibleActions = 0;
-						actionsInSection.each(function(){
+						actionsInSection.each(function () {
 							var curAction = $(this);
 							var title = curAction.find(".adminActionLabel").text();
 							var description = curAction.find(".adminActionDescription").text();
@@ -9136,8 +9292,121 @@ AspenDiscovery.Admin = (function () {
 							var descriptionMatches = searchRegex.test(description);
 							if (!titleMatches && !descriptionMatches) {
 								curAction.hide();
-							}else {
+							} else {
 								curAction.show();
+								numVisibleActions++;
+							}
+						});
+						if (numVisibleActions > 0) {
+							curSection.show();
+						} else {
+							curSection.hide();
+						}
+					}
+				});
+			}
+		},
+		searchPermissions: function () {
+			var searchValue = $("#searchPermissions").val();
+			var searchRegex = new RegExp(searchValue, 'i');
+			if (searchValue.length === 0) {
+				$(".permissionRow").show();
+				$(".permissionSection").show().removeClass('active');
+				$('.searchCollapse').addClass('collapse').css('height', '0px');
+			} else {
+				$('.searchCollapse').removeClass('collapse').css('height', 'auto');
+				$('.permissionSection').addClass('active');
+				var allPermissionSections = $(".permissionSection");
+				allPermissionSections.each(function () {
+					var curSection = $(this);
+					var sectionLabel = curSection.find(".permissionHeading");
+					var permissionSectionLabel = sectionLabel.text();
+					var permissionsInSection = curSection.find(".permissionRow");
+					if (searchRegex.test(permissionSectionLabel)) {
+						curSection.show();
+						permissionsInSection.show();
+						console.log(permissionsInSection)
+					} else {
+						var numVisibleActions = 0;
+						permissionsInSection.each(function () {
+							var curPermission = $(this);
+							var title = curPermission.find("#permissionLabel").text();
+							var description = curPermission.find("#permissionDescription").text();
+							var titleMatches = searchRegex.test(title);
+							var descriptionMatches = searchRegex.test(description);
+							if (!titleMatches && !descriptionMatches) {
+								curPermission.hide();
+							} else {
+								curPermission.show();
+								numVisibleActions++;
+							}
+						});
+						if (numVisibleActions > 0) {
+							curSection.show();
+						} else {
+							curSection.hide();
+						}
+					}
+				});
+			}
+		},
+
+		searchProperties: function () {
+			var searchValue = $("#propertySearch").val();
+			var searchRegex = new RegExp(searchValue, 'i');
+			if (searchValue.length === 0) {
+				$(".propertyRow").show();
+				$(".propertySectionHeading").show();
+				$(".propertySection").show();
+				//Collapse all panels
+				$(".editor .panel").removeClass('active');
+				$(".editor .accordion_body").removeClass('in');
+			} else {
+				var allAPropertyRows = $(".propertyRow");
+				allAPropertyRows.each(function () {
+					var curRow = $(this);
+					var rowText = curRow.text();
+					if (searchRegex.test(rowText)) {
+						curRow.show();
+					} else {
+						curRow.hide();
+					}
+				});
+				//Expand all panels
+				$(".editor .panel").addClass('active');
+				$(".editor .accordion_body").addClass('in');
+			}
+		},
+
+		searchAdminBar: function () {
+			var searchValue = $("#searchAdminBar").val();
+			var searchRegex = new RegExp(searchValue, 'i');
+			if (searchValue.length === 0) {
+				$(".adminMenuLink").show();
+				$('.admin-search-collapse').addClass('collapse').css('height', '0px');
+				$('.admin-menu-section').show().removeClass('active')
+			} else {
+				$('.admin-search-collapse').removeClass('collapse').css('height', 'auto');
+				$('.admin-menu-section').addClass('active')
+				var allMenuSections = $(".admin-menu-section");
+				allMenuSections.each(function () {
+					var curSection = $(this);
+					var sectionLabel = curSection.find(".adminTitleItem");
+					var menuSectionLabel = sectionLabel.text();
+					var adminLinksInSection = curSection.find(".adminMenuLink");
+					if (searchRegex.test(menuSectionLabel)) {
+						curSection.show();
+						adminLinksInSection.show();
+					} else {
+						var numVisibleActions = 0;
+						adminLinksInSection.each(function () {
+							var curMenuLink = $(this);
+							var title = curMenuLink.find(".adminLink").text();
+							var titleMatches = searchRegex.test(title);
+							if (!titleMatches) {
+								curMenuLink.hide();
+							} else {
+								curMenuLink.show();
 								numVisibleActions++;
 							}
 						});
@@ -9150,6 +9419,51 @@ AspenDiscovery.Admin = (function () {
 				});
 
 			}
+		},
+
+
+		showSearch: function () {
+			$('#adminSearchBox').css('display', 'block');
+			$('#showSearchButton').css('display', 'none');
+		},
+
+		showFindCommunityContentForm: function (toolModule, toolName, objectType) {
+			var params = {
+				method: 'getSearchCommunityContentForm',
+				toolModule: toolModule,
+				toolName: toolName,
+				objectType: objectType
+			}
+			var url = Globals.path + "/Admin/AJAX";
+			$.getJSON(url, params, function (data) {
+				AspenDiscovery.showMessageWithButtons(data.title, data.modalBody, data.modalButtons);
+			}).fail(AspenDiscovery.ajaxFail);
+			return false;
+		},
+
+		searchCommunityContent: function (toolModule, toolName) {
+			$("#communitySearchResultsLoading").show();
+			$("#communitySearchResults").html("");
+			var searchForm = $("#searchCommunityContentForm");
+			var objectType = searchForm.find("#objectType").val();
+			var communitySearchTerm = searchForm.find("#communitySearchTerm").val();
+			var url = Globals.path + '/API/CommunityAPI';
+			var params = {
+				'method': 'searchSharedContent',
+				'objectType': objectType,
+				'toolModule': toolModule,
+				'toolName': toolName,
+				'communitySearchTerm': communitySearchTerm,
+				'includeHtml': true
+			}
+			$.getJSON(url, params, function (data) {
+				$("#communitySearchResultsLoading").hide();
+				if (data.success === true) {
+					$("#communitySearchResults").html(data.communityResults);
+				} else {
+					$("#communitySearchResults").html(data.message);
+				}
+			});
 		}
 	};
 }(AspenDiscovery.Admin || {}));
@@ -12306,12 +12620,15 @@ AspenDiscovery.Account.ReadingHistory = (function(){
 AspenDiscovery.Record = (function(){
 	// noinspection JSUnusedGlobalSymbols
 	return {
-		showPlaceHold: function(module, source, id, volume){
+		showPlaceHold: function(module, source, id, volume, variationId){
 			if (Globals.loggedIn){
 				document.body.style.cursor = "wait";
 				var url = Globals.path + "/" + module + "/" + id + "/AJAX?method=getPlaceHoldForm&recordSource=" + source;
 				if (volume !== undefined){
 					url += "&volume=" + volume;
+				}
+				if (variationId !== undefined){
+					url += "&variationId=" + variationId;
 				}
 
 				var targetButton = $('#actionButton'+id);
@@ -12407,11 +12724,14 @@ AspenDiscovery.Record = (function(){
 			return false;
 		},
 
-		showPlaceHoldEditions: function (module, source, id, volume) {
+		showPlaceHoldEditions: function (module, source, id, volume, variationId) {
 			if (Globals.loggedIn){
 				var url = Globals.path + "/" + module + "/" + id + "/AJAX?method=getPlaceHoldEditionsForm&recordSource=" + source;
 				if (volume !== undefined){
 					url += "&volume=" + volume;
+				}
+				if (variationId !== undefined){
+					url += "&variationId=" + variationId;
 				}
 				$.getJSON(url, function(data){
 					AspenDiscovery.showMessageWithButtons(data.title, data.modalBody, data.modalButtons);
@@ -12455,6 +12775,7 @@ AspenDiscovery.Record = (function(){
 			var selectedItem = $('#selectedItem');
 			var module = $('#module').val();
 			var volume = $('#volume');
+			var variationId = $('#variationId');
 			var params = {
 				'method': 'placeHold',
 				pickupBranch: $('#pickupBranch').val(),
@@ -12472,6 +12793,9 @@ AspenDiscovery.Record = (function(){
 			}
 			if (volume.length > 0){
 				params['volume'] = volume.val();
+			}
+			if (variationId.length > 0){
+				params['variationId'] = variationId.val();
 			}
 			if (params['pickupBranch'] === 'undefined'){
 				alert("Please select a location to pick up your hold when it is ready.");
@@ -13265,6 +13589,16 @@ AspenDiscovery.Searches = (function(){
 			return false;
 		},
 
+		searchFacetValuesKeyDown: function (e) {
+			if (e.keyCode === 9) {
+				AspenDiscovery.Searches.searchFacetValues();
+			}else if (e.keyCode === 10 || e.keyCode === 13) {
+				e.preventDefault();
+				AspenDiscovery.Searches.searchFacetValues();
+			}
+			return false;
+		},
+
 		searchFacetValues: function () {
 			$("#facetSearchResultsPopularHelp").hide();
 			$("#facetSearchResultsLoading").show();
@@ -13980,11 +14314,6 @@ AspenDiscovery.WebBuilder = function () {
 				method: "getWebResource",
 				resourceId: id
 			};
-			// noinspection JSUnresolvedFunction
-			var newTab = window.open("", '_blank');
-			if (newTab==null) {
-				return ;
-			}
 
 			$.getJSON(url, params, function(data){
 				if(data.requireLogin) {
@@ -13996,12 +14325,16 @@ AspenDiscovery.WebBuilder = function () {
 						};
 						$.getJSON(url, params, function(usage){
 							if(data.openInNewTab) {
+								// noinspection JSUnresolvedFunction
+								var newTab = window.open("", '_blank');
+								if (newTab==null) {
+									return ;
+								}
 								newTab.location.href = data.url
 							} else {
-								newTab.close();
 								location.assign(data.url);
 							}
-						})
+						});
 					} else {
 						AspenDiscovery.Account.ajaxLogin(null, function(){
 							return AspenDiscovery.WebBuilder.getWebResource(id);
@@ -14015,12 +14348,16 @@ AspenDiscovery.WebBuilder = function () {
 					};
 					$.getJSON(url, params, function(usage){
 						if(data.openInNewTab) {
+							// noinspection JSUnresolvedFunction
+							var newTab = window.open("", '_blank');
+							if (newTab==null) {
+								return ;
+							}
 							newTab.location.href = data.url
 						} else {
-							newTab.close();
 							location.assign(data.url);
 						}
-					})
+					});
 				}
 			}).fail(AspenDiscovery.ajaxFail);
 
@@ -14067,7 +14404,7 @@ AspenDiscovery.IndexingClass = (function () {
 			//Config per Class
 			var ilsOptions = {
 				//Common for all classes
-				commonFields: ['propertyRowid', 'propertyRowname', 'propertyRowmarcPath', 'propertyRowfilenamesToInclude', 'propertyRowmarcEncoding', 'propertyRowindividualMarcPath', 'propertyRownumCharsToCreateFolderFrom', 'propertyRowcreateFolderFromLeadingCharacters', 'propertyRowgroupingClass', 'propertyRowrecordDriver', 'propertyRowcatalogDriver', 'propertyRowrecordUrlComponent', 'propertyRowprocessRecordLinking', 'propertyRowrecordNumberTag', 'propertyRowrecordNumberSubfield', 'propertyRowrecordNumberPrefix', 'propertyRowcustomMarcFieldsToIndexAsKeyword', 'propertyRowtreatUnknownLanguageAs', 'propertyRowtreatUndeterminedLanguageAs', 'propertyRowsuppressRecordsWithUrlsMatching', 'propertyRowdetermineAudienceBy', 'propertyRowaudienceSubfield', 'propertyRowtreatUnknownAudienceAs', 'propertyRowdetermineLiteraryFormBy', 'propertyRowliteraryFormSubfield', 'propertyRowhideUnknownLiteraryForm', 'propertyRowhideNotCodedLiteraryForm', 'propertyRowitemSection', 'propertyRowsuppressItemlessBibs', 'propertyRowitemTag', 'propertyRowitemRecordNumber', 'propertyRowuseItemBasedCallNumbers', 'propertyRowcallNumberPrestamp', 'propertyRowcallNumber', 'propertyRowcallNumberCutter', 'propertyRowcallNumberPoststamp', 'propertyRowlocation', 'propertyRowincludeLocationNameInDetailedLocation', 'propertyRownonHoldableLocations', 'propertyRowlocationsToSuppress', 'propertyRowsubLocation', 'propertyRowshelvingLocation', 'propertyRowcollection', 'propertyRowcollectionsToSuppress', 'propertyRowvolume', 'propertyRowitemUrl', 'propertyRowbarcode', 'propertyRowstatus', 'propertyRownonHoldableStatuses', 'propertyRowstatusesToSuppress', 'propertyRowtreatLibraryUseOnlyGroupedStatusesAsAvailable', 'propertyRowtotalCheckouts', 'propertyRowlastYearCheckouts', 'propertyRowyearToDateCheckouts', 'propertyRowtotalRenewals', 'propertyRowiType', 'propertyRownonHoldableITypes', 'propertyRowiTypesToSuppress', 'propertyRowdueDate', 'propertyRowdueDateFormat', 'propertyRowdateCreated', 'propertyRowdateCreatedFormat', 'propertyRowlastCheckinDate', 'propertyRowlastCheckinFormat', 'propertyRowformat', 'propertyRoweContentDescriptor', 'propertyRowdoAutomaticEcontentSuppression', 'propertyRownoteSubfield', 'propertyRowformatMappingSection', 'propertyRowformatSource', 'propertyRowfallbackFormatField', 'propertyRowspecifiedFormat', 'propertyRowspecifiedFormatCategory', 'propertyRowspecifiedFormatBoost', 'propertyRowcheckRecordForLargePrint', 'propertyRowformatMap', 'propertyRowstatusMappingSection', 'propertyRowstatusMap', 'propertyRoworderTag', 'propertyRoworderStatus', 'propertyRoworderLocationSingle', 'propertyRoworderLocation', 'propertyRoworderCopies', 'propertyRoworderCode3', 'propertyRowregroupAllRecords', 'propertyRowrunFullUpdate', 'propertyRowlastUpdateOfChangedRecords', 'propertyRowlastUpdateOfAllRecords', 'propertyRowlastChangeProcessed', 'propertyRowfullMarcExportRecordIdThreshold', 'propertyRowlastUpdateFromMarcExport', 'propertyRowtranslationMaps', 'FloatingSave', 'propertyRowindex856Links'],
+				commonFields: ['propertyRowid', 'propertyRowname', 'propertyRowmarcPath', 'propertyRowfilenamesToInclude', 'propertyRowmarcEncoding', 'propertyRowindividualMarcPath', 'propertyRownumCharsToCreateFolderFrom', 'propertyRowcreateFolderFromLeadingCharacters', 'propertyRowgroupingClass', 'propertyRowrecordDriver', 'propertyRowcatalogDriver', 'propertyRowrecordUrlComponent', 'propertyRowprocessRecordLinking', 'propertyRowrecordNumberTag', 'propertyRowrecordNumberSubfield', 'propertyRowrecordNumberPrefix', 'propertyRowcustomMarcFieldsToIndexAsKeyword', 'propertyRowtreatUnknownLanguageAs', 'propertyRowtreatUndeterminedLanguageAs', 'propertyRowsuppressRecordsWithUrlsMatching', 'propertyRowdetermineAudienceBy', 'propertyRowaudienceSubfield', 'propertyRowtreatUnknownAudienceAs', 'propertyRowdetermineLiteraryFormBy', 'propertyRowliteraryFormSubfield', 'propertyRowhideUnknownLiteraryForm', 'propertyRowhideNotCodedLiteraryForm', 'propertyRowitemSection', 'propertyRowsuppressItemlessBibs', 'propertyRowitemTag', 'propertyRowitemRecordNumber', 'propertyRowuseItemBasedCallNumbers', 'propertyRowcallNumberPrestamp', 'propertyRowcallNumber', 'propertyRowcallNumberCutter', 'propertyRowcallNumberPoststamp', 'propertyRowlocation', 'propertyRowincludeLocationNameInDetailedLocation', 'propertyRownonHoldableLocations', 'propertyRowlocationsToSuppress', 'propertyRowsubLocation', 'propertyRowshelvingLocation', 'propertyRowcollection', 'propertyRowcollectionsToSuppress', 'propertyRowvolume', 'propertyRowitemUrl', 'propertyRowbarcode', 'propertyRowstatus', 'propertyRownonHoldableStatuses', 'propertyRowstatusesToSuppress', 'propertyRowtreatLibraryUseOnlyGroupedStatusesAsAvailable', 'propertyRowtotalCheckouts', 'propertyRowlastYearCheckouts', 'propertyRowyearToDateCheckouts', 'propertyRowtotalRenewals', 'propertyRowiType', 'propertyRownonHoldableITypes', 'propertyRowiTypesToSuppress', 'propertyRowdueDate', 'propertyRowdueDateFormat', 'propertyRowdateCreated', 'propertyRowdateCreatedFormat', 'propertyRowlastCheckinDate', 'propertyRowlastCheckinFormat', 'propertyRowformat', 'propertyRoweContentDescriptor', 'propertyRowdoAutomaticEcontentSuppression', 'propertyRownoteSubfield', 'propertyRowformatMappingSection', 'propertyRowformatSource', 'propertyRowfallbackFormatField', 'propertyRowspecifiedFormat', 'propertyRowspecifiedFormatCategory', 'propertyRowspecifiedFormatBoost', 'propertyRowcheckRecordForLargePrint', 'propertyRowformatMap', 'propertyRowstatusMappingSection', 'propertyRowstatusMap', 'propertyRoworderTag', 'propertyRoworderStatus', 'propertyRoworderLocationSingle', 'propertyRoworderLocation', 'propertyRoworderCopies', 'propertyRoworderCode3', 'propertyRowregroupAllRecords', 'propertyRowrunFullUpdate', 'propertyRowlastUpdateOfChangedRecords', 'propertyRowlastUpdateOfAllRecords', 'propertyRowlastChangeProcessed', 'propertyRowfullMarcExportRecordIdThreshold', 'propertyRowlastUpdateFromMarcExport', 'propertyRowtranslationMaps', 'FloatingSave', 'propertyRowindex856Links', 'propertyRowincludePersonalAndCorporateNamesInTopics'],
 				//Specific per class
 				Koha: ['propertyRowlastUpdateOfAuthorities'],
 				Evolve: [],

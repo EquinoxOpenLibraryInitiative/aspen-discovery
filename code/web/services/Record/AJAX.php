@@ -201,6 +201,11 @@ class Record_AJAX extends Action {
 			if (isset($_REQUEST['volume'])) {
 				$interface->assign('volume', $_REQUEST['volume']);
 			}
+			$selectedVariationId = -1;
+			if (isset($_REQUEST['variationId'])) {
+				$interface->assign('variationId', $_REQUEST['variationId']);
+				$selectedVariationId = $_REQUEST['variationId'];
+			}
 
 			$marcRecord = new MarcRecordDriver($id);
 
@@ -231,18 +236,19 @@ class Record_AJAX extends Action {
 			$relatedRecord = $marcRecord->getGroupedWorkDriver()->getRelatedRecord($marcRecord->getIdWithSource());
 			if (count($relatedRecord->recordVariations) > 1){
 				foreach ($relatedRecord->recordVariations as $variation){
-					$formatValue = $variation->manifestation->format;
-					global $indexingProfiles;
-					$indexingProfile = $indexingProfiles[$marcRecord->getRecordType()];
-					$formatMap = $indexingProfile->formatMap;
-					//Loop through the format map
-					/** @var FormatMapValue $formatMapValue */
-					//Check for a format with a hold type that is not 'none'
-					foreach ($formatMap as $formatMapValue) {
-						if (strcasecmp($formatMapValue->format, $formatValue) === 0) {
-							$holdType = $formatMapValue->holdType;
-							if ($holdType != 'none') {
-								$format = $formatValue;
+					if (($selectedVariationId == -1) || ($selectedVariationId == $variation->databaseId)) {
+						$formatValue = $variation->manifestation->format;
+						global $indexingProfiles;
+						$indexingProfile = $indexingProfiles[$marcRecord->getRecordType()];
+						$formatMap = $indexingProfile->formatMap;
+						//Loop through the format map /** @var FormatMapValue $formatMapValue */
+						//Check for a format with a hold type that is not 'none'
+						foreach ($formatMap as $formatMapValue) {
+							if (strcasecmp($formatMapValue->format, $formatValue) === 0) {
+								$holdType = $formatMapValue->holdType;
+								if ($holdType != 'none') {
+									$format = $formatValue;
+								}
 							}
 						}
 					}
@@ -251,11 +257,19 @@ class Record_AJAX extends Action {
 				if (empty($format)){
 					$format = $marcRecord->getPrimaryFormat();
 				}
+				//Filter the items according to the selected variation
+				if ($selectedVariationId != -1) {
+					foreach ($items as $index => $item) {
+						if ($item['variationId'] != $selectedVariationId) {
+							unset($items[$index]);
+						}
+					}
+				}
 			}else{
 				$format = $marcRecord->getPrimaryFormat();
 			}
 
-			if (isset($_REQUEST['volume'])) {
+			if (!empty($_REQUEST['volume'])) {
 				//If we have a volume, we always place a volume hold
 				$holdType = 'volume';
 			} else {
@@ -332,7 +346,7 @@ class Record_AJAX extends Action {
 				if ($holdType == 'item' && isset($_REQUEST['selectedItem'])) {
 					$results = $user->placeItemHold($id, $_REQUEST['selectedItem'], $user->getPickupLocationCode());
 				} else {
-					if (isset($_REQUEST['volume'])) {
+					if (!empty($_REQUEST['volume'])) {
 						$results = $user->placeVolumeHold($shortId, $_REQUEST['volume'], $user->getPickupLocationCode());
 					} else {
 						$results = $user->placeHold($id, $user->getPickupLocationCode());

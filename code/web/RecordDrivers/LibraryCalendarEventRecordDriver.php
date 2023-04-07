@@ -13,11 +13,21 @@ class LibraryCalendarEventRecordDriver extends IndexRecordDriver {
 			parent::__construct($recordData);
 			$this->valid = true;
 		} else {
-			require_once ROOT_DIR . '/sys/SearchObject/EventsSearcher.php';
-			$searchObject = new SearchObject_EventsSearcher();
-			$recordData = $searchObject->getRecord($recordData);
-			parent::__construct($recordData);
-			$this->valid = true;
+			disableErrorHandler();
+			try {
+				require_once ROOT_DIR . '/sys/SearchObject/EventsSearcher.php';
+				$searchObject = new SearchObject_EventsSearcher();
+				$recordData = $searchObject->getRecord($recordData);
+				if ($recordData == null) {
+					$this->valid = false;
+				} else {
+					parent::__construct($recordData);
+					$this->valid = true;
+				}
+			} catch (Exception $e) {
+				$this->valid = false;
+			}
+			enableErrorHandler();
 		}
 	}
 
@@ -26,7 +36,19 @@ class LibraryCalendarEventRecordDriver extends IndexRecordDriver {
 	}
 
 	public function getListEntry($listId = null, $allowEdit = true) {
-		return $this->getSearchResult('list');
+		//Use getSearchResult to do the bulk of the assignments
+		$this->getSearchResult('list', false);
+
+		//Switch template
+		return 'RecordDrivers/Events/listEntry.tpl';
+	}
+
+	public function getTitle(){
+		$title = isset($this->fields['title']) ? $this->fields['title'] : (isset($this->fields['title_display']) ? $this->fields['title_display'] : '');
+		if (strpos($title, '|') > 0) {
+			$title = substr($title, 0, strpos($title, '|'));
+		}
+		return trim($title);
 	}
 
 	public function getSearchResult($view = 'list') {
@@ -87,7 +109,8 @@ class LibraryCalendarEventRecordDriver extends IndexRecordDriver {
 	}
 
 	public function getStaffView() {
-		// TODO: Implement getStaffView() method.
+		global $interface;
+		return $this->getEventObject()->getDecodedData();
 	}
 
 	public function getDescription() {
@@ -111,7 +134,21 @@ class LibraryCalendarEventRecordDriver extends IndexRecordDriver {
 	}
 
 	public function getLinkUrl($absolutePath = false) {
+		return '/LibraryMarket/' . $this->getId() . '/Event';
+	}
+
+	public function getExternalUrl($absolutePath = false) {
 		return $this->fields['url'];
+	}
+
+	public function getAudiences() {
+		if (array_key_exists('age_group', $this->fields)){
+			return $this->fields['age_group'];
+		}
+	}
+
+	public function getBranch() {
+		return implode(", ", $this->fields['branch']);
 	}
 
 	private function getType() {
@@ -153,6 +190,25 @@ class LibraryCalendarEventRecordDriver extends IndexRecordDriver {
 			return $startDate;
 		} catch (Exception $e) {
 			return null;
+		}
+	}
+
+	public function getEndDate() {
+		try {
+			//Need to specify timezone since we start as a timstamp
+			$endDate = new DateTime($this->fields['end_date']);
+			$endDate->setTimezone(new DateTimeZone(date_default_timezone_get()));
+			return $endDate;
+		} catch (Exception $e) {
+			return null;
+		}
+	}
+
+	public function isRegistrationRequired(): bool {
+		if ($this->fields['registration_required'] == "Yes") {
+			return true;
+		} else {
+			return false;
 		}
 	}
 

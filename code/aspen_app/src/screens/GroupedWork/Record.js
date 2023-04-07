@@ -11,7 +11,7 @@ import ShowItemDetails from './CopyDetails';
 import SelectLinkedAccount from './SelectLinkedAccount';
 import SelectPickupLocation from './SelectPickupLocation';
 import SelectVolumeHold from './SelectVolumeHold';
-import {CheckoutsContext, LibraryBranchContext, LibrarySystemContext, UserContext} from '../../context/initialContext';
+import {CheckoutsContext, LanguageContext, LibraryBranchContext, LibrarySystemContext, UserContext} from '../../context/initialContext';
 import {reloadProfile} from '../../util/api/user';
 import {SafeAreaView} from 'react-native';
 
@@ -408,6 +408,7 @@ const ILS = (props) => {
      const {user, updateUser} = React.useContext(UserContext);
      const {library} = React.useContext(LibrarySystemContext);
      const {location} = React.useContext(LibraryBranchContext);
+     const {language} = React.useContext(LanguageContext);
      const [loading, setLoading] = React.useState(false);
 
     const volumeInfo = {
@@ -439,6 +440,7 @@ const ILS = (props) => {
                   updateProfile={props.updateProfile}
                   hasItemsWithoutVolumes={props.hasItemsWithoutVolumes}
                   volumeCount={props.volumeCount}
+                  language={language}
               />
           );
      } else {
@@ -462,6 +464,7 @@ const ILS = (props) => {
                        hasItemsWithoutVolumes={props.hasItemsWithoutVolumes}
                        majorityOfItemsHaveVolumes={props.majorityOfItemsHaveVolumes}
                        volumeCount={props.volumeCount}
+                       language={language}
                    />
                );
           } else {
@@ -611,7 +614,7 @@ const OnHoldForYou = (props) => {
 };
 
 // complete the action on the item, i.e. checkout, hold, or view sample
-export async function completeAction(id, actionType, patronId, formatId = null, sampleNumber = null, pickupBranch = null, url, volumeId = null, holdType = null, holdNotificationPreferences) {
+export async function completeAction(id, actionType, patronId, formatId = null, sampleNumber = null, pickupBranch = null, url, volumeId = null, holdType = null, holdNotificationPreferences, variationId = null) {
      const recordId = id.split(':');
      const source = recordId[0];
      let itemId = recordId[1];
@@ -645,7 +648,7 @@ export async function completeAction(id, actionType, patronId, formatId = null, 
                     return getPromptForOverdriveEmail;
                }
           } else {
-               return await placeHold(url, itemId, source, patronId, pickupBranch, null, holdType, id, holdNotificationPreferences);
+               return await placeHold(url, itemId, source, patronId, pickupBranch, null, holdType, id, holdNotificationPreferences, variationId);
           }
      } else if (actionType.includes('sample')) {
           return await overDriveSample(url, formatId, itemId, sampleNumber);

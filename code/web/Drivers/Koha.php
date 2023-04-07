@@ -494,7 +494,10 @@ class Koha extends AbstractIlsDriver {
 				if ($allowRenewals['success'] == true) {
 					$curCheckout->canRenew = 0;
 					$curCheckout->autoRenew = 0;
-					$curCheckout->renewError = $allowRenewals['error'];
+					$curCheckout->renewError = translate([
+						'text' => $allowRenewals['error'],
+						'isPublicFacing' => true,
+					]);
 				}
 			}
 
@@ -1405,6 +1408,43 @@ class Koha extends AbstractIlsDriver {
 				$holdParams['expiration_date'] = $cancelDate;
 			}
 
+			//Check to see if we need to place holds on a specific variation.
+			/** @var Grouping_Record[] $recordVariations */
+			$recordVariations = $recordDriver->getRecordVariations();
+			$activeRecordVariation = null;
+			if (count($recordVariations) > 1 && !empty($_REQUEST['variationId'])) {
+				foreach ($recordVariations as $recordVariation) {
+					if ($recordVariation->variationId == $_REQUEST['variationId']) {
+						$activeRecordVariation = $recordVariation;
+						break;
+					}
+				}
+			}
+			if ($activeRecordVariation != null) {
+				$items = $activeRecordVariation->getItems();
+				$allItemTypes = [];
+
+				$marcRecord = $recordDriver->getMarcRecord();
+				$marcItems = $marcRecord->getFields($this->getIndexingProfile()->itemTag);
+				foreach ($items as $recordItem) {
+					foreach ($marcItems as $marcItem) {
+						$itemSubField = $marcItem->getSubfield($this->getIndexingProfile()->itemRecordNumber);
+						if ($itemSubField->getData() == $recordItem->itemId) {
+							$iTypeSubfield = $marcItem->getSubfield($this->getIndexingProfile()->iType);
+							if ($iTypeSubfield != null) {
+								$allItemTypes[$iTypeSubfield->getData()] = $iTypeSubfield->getData();
+							}
+							break;
+						}
+					}
+				}
+				//If there is more than one item type for the variation, we don't know what to place a hold on so just do bib level.
+				//If there is just one, we can do an item type hold
+				if (count($allItemTypes) == 1) {
+					$holdParams['item_type'] = reset($allItemTypes);
+				}
+			}
+
 			$postParams = json_encode($holdParams);
 			$this->apiCurlWrapper->addCustomHeaders([
 				'Authorization: Bearer ' . $oauthToken,
@@ -1873,6 +1913,13 @@ class Koha extends AbstractIlsDriver {
 		$showHoldPosition = $this->getKohaSystemPreference('OPACShowHoldQueueDetails', 'holds');
 		$allowUserToChangeBranch = $this->getKohaSystemPreference('OPACAllowUserToChangeBranch', 'none');
 
+		require_once ROOT_DIR . '/sys/Indexing/TranslationMap.php';
+		$iTypeTranslationMap = new TranslationMap();
+		$iTypeTranslationMap->name = 'itype';
+		if (!$iTypeTranslationMap->find(true)) {
+			$iTypeTranslationMap = null;
+		}
+
 		/** @noinspection SqlResolve */
 		$sql = "SELECT reserves.*, biblio.title, biblio.author, items.itemcallnumber, items.enumchron, items.itype, reserves.branchcode FROM reserves inner join biblio on biblio.biblionumber = reserves.biblionumber left join items on items.itemnumber = reserves.itemnumber where borrowernumber = '" . mysqli_escape_string($this->dbConnection, $patron->username) . "';";
 		$results = mysqli_query($this->dbConnection, $sql);
@@ -1935,7 +1982,7 @@ class Koha extends AbstractIlsDriver {
 				$curHold->status = "Frozen";
 				$curHold->canFreeze = true;
 				if ($curRow['suspend_until'] != null) {
-					$curHold->status .= ' until ' . date("m/d/Y", strtotime($curRow['suspend_until']));
+					$curHold->status .= ' until ' . date("M d, Y", strtotime($curRow['suspend_until']));
 				}
 				$curHold->locationUpdateable = true;
 				if($this->getKohaVersion() >= 22.11) {
@@ -1989,6 +2036,18 @@ class Koha extends AbstractIlsDriver {
 			$recordDriver = RecordDriverFactory::initRecordDriverById($this->getIndexingProfile()->name . ':' . $curHold->recordId);
 			if ($recordDriver->isValid()) {
 				$curHold->updateFromRecordDriver($recordDriver);
+				//See if we need to override the format based on the item type
+				$itemType = $curRow['itemtype'];
+				if(is_null($itemType) && isset($curRow['itype'])) {
+					$itemType = $curRow['itype'];
+				}
+				if (!is_null($itemType)) {
+					if ($iTypeTranslationMap != null) {
+						$curHold->format = $iTypeTranslationMap->translate($itemType);
+					} else {
+						$curHold->format = $itemType;
+					}
+				}
 			}
 
 			$isAvailable = isset($curHold->status) && preg_match('/^Ready to Pickup.*/i', $curHold->status);
@@ -3742,7 +3801,6 @@ class Koha extends AbstractIlsDriver {
 	}
 
 	function selfRegisterViaSSO($ssoUser): array {
-		global $locationSingleton;
 		global $library;
 
 		$result = ['success' => false,];
@@ -4331,12 +4389,6 @@ class Koha extends AbstractIlsDriver {
 	 * @return string[]
 	 */
 	function processMaterialsRequestForm($user) {
-		if (empty($user->cat_password)) {
-			return [
-				'success' => false,
-				'message' => 'Unable to place materials request in masquerade mode',
-			];
-		}
 		if ($this->getKohaVersion() > 21.05) {
 			$result = [
 				'success' => false,
@@ -4425,6 +4477,12 @@ class Koha extends AbstractIlsDriver {
 			}
 			return $result;
 		} else {
+			if (empty($user->cat_password)) {
+				return [
+					'success' => false,
+					'message' => 'Unable to place materials request in masquerade mode',
+				];
+			}
 			$loginResult = $this->loginToKohaOpac($user);
 			if (!$loginResult['success']) {
 				return [
@@ -4749,7 +4807,7 @@ class Koha extends AbstractIlsDriver {
 				}
 			}
 		} else {
-			//Restrict certain sections based on ASpen settings
+			//Restrict certain sections based on Aspen settings
 			if (!$library->allowPatronPhoneNumberUpdates) {
 				if (array_key_exists('contactInformationSection', $patronUpdateFields)) {
 					if (array_key_exists('borrower_phone', $patronUpdateFields['contactInformationSection']['properties'])) {

@@ -4,6 +4,7 @@ require_once ROOT_DIR . '/sys/DB/DataObject.php';
 require_once ROOT_DIR . '/sys/LibraryLocation/Holiday.php';
 require_once ROOT_DIR . '/sys/LibraryLocation/LibraryFacetSetting.php';
 require_once ROOT_DIR . '/sys/LibraryLocation/LibraryCombinedResultSection.php';
+require_once ROOT_DIR . '/sys/LibraryLocation/LibraryTheme.php';
 if (file_exists(ROOT_DIR . '/sys/Indexing/LibraryRecordToInclude.php')) {
 	require_once ROOT_DIR . '/sys/Indexing/LibraryRecordToInclude.php';
 }
@@ -63,6 +64,7 @@ class Library extends DataObject {
 
 	//More general display configurations
 	public $theme;
+	public $_themes;
 	public $layoutSettingId;  //Link to LayoutSetting
 	public $groupedWorkDisplaySettingId; //Link to GroupedWorkDisplaySettings
 
@@ -120,6 +122,7 @@ class Library extends DataObject {
 	public $xpressPaySettingId;
 	public $aciSpeedpaySettingId;
 	public $invoiceCloudSettingId;
+	public $deluxeCertifiedPaymentsSettingId;
 
 	public /** @noinspection PhpUnused */
 		$repeatSearchOption;
@@ -174,8 +177,7 @@ class Library extends DataObject {
 	public $externalMaterialsRequestUrl;
 	public /** @noinspection PhpUnused */
 		$eContentLinkRules;
-	public /** @noinspection PhpUnused */
-		$includeNovelistEnrichment;
+	public $novelistSettingId;
 	public /** @noinspection PhpUnused */
 		$allowAutomaticSearchReplacements;
 
@@ -409,7 +411,8 @@ class Library extends DataObject {
 			'worldPaySettingId',
 			'payPalSettingId',
 			'ebscohostSearchSettingId',
-			'invoiceCloudSettingId'
+			'invoiceCloudSettingId',
+			'deluxeCertifiedPaymentsSettingId'
 		];
 	}
 
@@ -449,6 +452,10 @@ class Library extends DataObject {
 		unset($combinedResultsStructure['libraryId']);
 		unset($combinedResultsStructure['weight']);
 
+		$libraryThemeStructure = LibraryTheme::getObjectStructure($context);
+		unset($libraryThemeStructure['libraryId']);
+		unset($libraryThemeStructure['weight']);
+
 		require_once ROOT_DIR . '/sys/Account/AccountProfile.php';
 		$accountProfile = new AccountProfile();
 		$accountProfile->orderBy('name');
@@ -460,13 +467,15 @@ class Library extends DataObject {
 			}
 		}
 
-		require_once ROOT_DIR . '/sys/Theming/Theme.php';
-		$theme = new Theme();
-		$availableThemes = [];
-		$theme->orderBy('themeName');
-		$theme->find();
-		while ($theme->fetch()) {
-			$availableThemes[$theme->id] = $theme->themeName;
+		require_once ROOT_DIR . '/sys/Enrichment/NovelistSetting.php';
+		$novelist = new NovelistSetting();
+		$availableNovelistSettings = [
+			'-1' => 'None'
+		];
+		$novelist->orderBy('profile');
+		$novelist->find();
+		while ($novelist->fetch()) {
+			$availableNovelistSettings[$novelist->id] = $novelist->profile;
 		}
 
 		$materialsRequestOptions = [
@@ -579,6 +588,16 @@ class Library extends DataObject {
 		$invoiceCloudSettings[-1] = 'none';
 		while ($invoiceCloudSetting->fetch()) {
 			$invoiceCloudSettings[$invoiceCloudSetting->id] = $invoiceCloudSetting->name;
+		}
+
+		require_once ROOT_DIR . '/sys/ECommerce/CertifiedPaymentsByDeluxeSetting.php';
+		$deluxeCertifiedPaymentsSetting = new CertifiedPaymentsByDeluxeSetting();
+		$deluxeCertifiedPaymentsSetting->orderBy('name');
+		$deluxeCertifiedPaymentsSettings = [];
+		$deluxeCertifiedPaymentsSetting->find();
+		$deluxeCertifiedPaymentsSettings[-1] = 'none';
+		while ($deluxeCertifiedPaymentsSetting->fetch()) {
+			$deluxeCertifiedPaymentsSettings[$deluxeCertifiedPaymentsSetting->id] = $deluxeCertifiedPaymentsSetting->name;
 		}
 
 		require_once ROOT_DIR . '/sys/Hoopla/HooplaScope.php';
@@ -825,14 +844,22 @@ class Library extends DataObject {
 				'label' => 'Basic Display',
 				'hideInLists' => true,
 				'properties' => [
-					'theme' => [
-						'property' => 'theme',
-						'type' => 'enum',
-						'label' => 'Theme',
-						'values' => $availableThemes,
-						'description' => 'The theme which should be used for the library',
-						'hideInLists' => true,
+					'themes' => [
+						'property' => 'themes',
+						'type' => 'oneToMany',
+						'label' => 'Themes',
+						'description' => 'The themes which can be used for the library',
+						'keyThis' => 'libraryId',
+						'keyOther' => 'libraryId',
+						'subObjectType' => 'LibraryTheme',
+						'structure' => $libraryThemeStructure,
 						'default' => 'default',
+						'sortable' => true,
+						'storeDb' => true,
+						'allowEdit' => true,
+						'canEdit' => false,
+						'canAddNew' => true,
+						'canDelete' => true,
 						'permissions' => ['Library Theme Configuration'],
 					],
 					'layoutSettingId' => [
@@ -2218,7 +2245,8 @@ class Library extends DataObject {
 							6 => 'Xpress-pay',
 							7 => 'FIS WorldPay',
 							8 => 'ACI Speedpay',
-							9 => 'InvoiceCloud'
+							9 => 'InvoiceCloud',
+							10 => 'Certified Payments by Deluxe'
 						],
 						'description' => 'Whether or not users should be allowed to pay fines',
 						'hideInLists' => true,
@@ -2339,6 +2367,15 @@ class Library extends DataObject {
 						'values' => $invoiceCloudSettings,
 						'label' => 'InvoiceCloud Settings',
 						'description' => 'The InvoiceCloud settings to use',
+						'hideInLists' => true,
+						'default' => -1,
+					],
+					'deluxeCertifiedPaymentsSettingId' => [
+						'property' => 'deluxeCertifiedPaymentsSettingId',
+						'type' => 'enum',
+						'values' => $deluxeCertifiedPaymentsSettings,
+						'label' => 'Certified Payments by Deluxe Settings',
+						'description' => 'The Certified Payments by Deluxe settings to use',
 						'hideInLists' => true,
 						'default' => -1,
 					],
@@ -2615,6 +2652,15 @@ class Library extends DataObject {
 						'default' => '1',
 						'hideInLists' => true,
 					],
+					'novelistSettingId' => [
+						'property' => 'novelistSettingId',
+						'type' => 'enum',
+						'values' => $availableNovelistSettings,
+						'label' => 'Novelist Select Profile',
+						'description' => 'The Novelist Select Profile to use',
+						'default' => '-1',
+						'hideInLists' => true,
+					],
 				],
 			],
 
@@ -2726,6 +2772,7 @@ class Library extends DataObject {
 						'type' => 'text',
 						'label' => 'Email to receive notifications for new Materials Requests',
 						'description' => 'The email address that will receive emails when a patron creates a new Materials Request.',
+						'maxLength' => 125,
 						'hideInLists' => true,
 					],
 					'materialsRequestSendStaffEmailOnAssign' => [
@@ -3422,6 +3469,31 @@ class Library extends DataObject {
 
 	static $searchLibrary = [];
 
+	static function hasEventSettings() : bool {
+		try {
+			require_once ROOT_DIR . '/sys/Events/CommunicoSetting.php';
+			require_once ROOT_DIR . '/sys/Events/SpringshareLibCalSetting.php';
+			require_once ROOT_DIR . '/sys/Events/LMLibraryCalendarSetting.php';
+
+			$communicoSettings = new CommunicoSetting();
+			$SpringshareLibCalSetting = new SpringshareLibCalSetting();
+			$LMLibraryCalendarSetting = new LMLibraryCalendarSetting();
+
+			if ($communicoSettings->find(true)) {
+				return true;
+			} elseif ($SpringshareLibCalSetting->find(true)) {
+				return true;
+			} elseif ($LMLibraryCalendarSetting->find(true)) {
+				return true;
+			} else {
+				return false;
+			}
+		}catch (Exception $e) {
+			//This happens when all tables are not created
+			return false;
+		}
+	}
+
 	static function getSearchLibrary($searchSource = null) {
 		if ($searchSource == null) {
 			global $searchSource;
@@ -3647,6 +3719,8 @@ class Library extends DataObject {
 				}
 				return $this->combinedResultSections;
 			}
+		} elseif ($name == 'themes') {
+			return $this->getThemes();
 		} elseif ($name == 'cloudLibraryScopes') {
 			return $this->getCloudLibraryScopes();
 		} elseif ($name == 'quickSearches') {
@@ -3679,6 +3753,8 @@ class Library extends DataObject {
 		} elseif ($name == 'combinedResultSections') {
 			/** @noinspection PhpUndefinedFieldInspection */
 			$this->combinedResultSections = $value;
+		} elseif ($name == 'themes') {
+			$this->_themes = $value;
 		} elseif ($name == 'cloudLibraryScopes') {
 			$this->_cloudLibraryScopes = $value;
 		} elseif ($name == 'quickSearches') {
@@ -3694,6 +3770,18 @@ class Library extends DataObject {
 	 * @see DB/DB_DataObject::update()
 	 */
 	public function update($context = '') {
+		//Make sure we have no other default libraries since
+		if ($this->isDefault == 1 && $this->_changedFields != null) {
+			if(in_array('isDefault', $this->_changedFields)) {
+				$library = new Library();
+				$library->isDefault = 1;
+				$library->find();
+				while ($library->fetch()) {
+					$library->isDefault = 0;
+					$library->update();
+				}
+			}
+		}
 		//Updates to properly update settings based on the ILS
 		$isKoha = false;
 		foreach (UserAccount::getAccountProfiles() as $accountProfileInfo) {
@@ -3726,6 +3814,7 @@ class Library extends DataObject {
 			$this->saveLibraryLinks();
 			$this->saveCombinedResultSections();
 			$this->saveCloudLibraryScopes();
+			$this->saveThemes();
 			//$this->saveQuickSearches();
 		}
 		if ($this->_patronNameDisplayStyleChanged) {
@@ -3781,6 +3870,7 @@ class Library extends DataObject {
 			$this->saveLibraryLinks();
 			$this->saveCombinedResultSections();
 			$this->saveCloudLibraryScopes();
+			$this->saveThemes();
 			//$this->saveQuickSearches();
 			$this->processSso();
 		}
@@ -3847,7 +3937,7 @@ class Library extends DataObject {
 	}
 
 	/**
-	 * @return LibraryCloudLibraryScope[]
+	 * @return LibraryCloudLibraryScope[]|null
 	 */
 	public function getCloudLibraryScopes(): ?array {
 		if (!isset($this->_cloudLibraryScopes) && $this->libraryId) {
@@ -3867,6 +3957,35 @@ class Library extends DataObject {
 		if (isset ($this->_cloudLibraryScopes) && is_array($this->_cloudLibraryScopes)) {
 			$this->saveOneToManyOptions($this->_cloudLibraryScopes, 'libraryId');
 			unset($this->_cloudLibraryScopes);
+		}
+	}
+
+	public function getPrimaryTheme() {
+		$allThemes = $this->getThemes();
+		return reset($allThemes);
+	}
+	/**
+	 * @return LibraryTheme[]|null
+	 */
+	public function getThemes(): ?array {
+		if (!isset($this->_themes) && $this->libraryId) {
+			$this->_themes = [];
+			$libraryTheme = new LibraryTheme();
+			$libraryTheme->libraryId = $this->libraryId;
+			$libraryTheme->orderBy('weight');
+			if ($libraryTheme->find()) {
+				while ($libraryTheme->fetch()) {
+					$this->_themes[$libraryTheme->id] = clone $libraryTheme;
+				}
+			}
+		}
+		return $this->_themes;
+	}
+
+	public function saveThemes() {
+		if (isset ($this->_themes) && is_array($this->_themes)) {
+			$this->saveOneToManyOptions($this->_themes, 'libraryId');
+			unset($this->_themes);
 		}
 	}
 
@@ -4237,6 +4356,8 @@ class Library extends DataObject {
 			'allowProfileUpdates' => $this->allowProfileUpdates,
 			'showShareOnExternalSites' => $this->showShareOnExternalSites,
 			'discoveryVersion' => $interface->getVariable('gitBranchWithCommit'),
+			'usernameLabel' => $this->loginFormUsernameLabel ?? 'Your Name',
+			'passwordLabel' => $this->loginFormPasswordLabel ?? 'Library Card Number'
 		];
 		if (empty($this->baseUrl)) {
 			$apiInfo['baseUrl'] = $configArray['Site']['url'];
@@ -4257,25 +4378,29 @@ class Library extends DataObject {
 			];
 		}
 		$apiInfo['notifications'] = $this->getLiDANotifications();
-		$activeTheme = new Theme();
-		$activeTheme->id = $this->theme;
-		if ($activeTheme->find(true)) {
-			$activeTheme->applyDefaults();
-			if ($activeTheme->logoName) {
-				$apiInfo['logo'] = $configArray['Site']['url'] . '/files/original/' . $activeTheme->logoName;
+		$allThemes = $this->getThemes();
+		if (count($allThemes) > 0) {
+			$activeTheme = reset($allThemes);
+			$theme = new Theme();
+			$theme->id = $activeTheme->id;
+			if($theme->find(true)) {
+				$theme->applyDefaults();
+				if ($theme->logoName) {
+					$apiInfo['logo'] = $configArray['Site']['url'] . '/files/original/' . $theme->logoName;
+				}
+				if ($theme->favicon) {
+					$apiInfo['favicon'] = $configArray['Site']['url'] . '/files/original/' . $theme->favicon;
+				}
+				if ($theme->logoApp) {
+					$apiInfo['logoApp'] = $configArray['Site']['url'] . '/files/original/' . $theme->logoApp;
+				}
+				$apiInfo['primaryBackgroundColor'] = $theme->primaryBackgroundColor;
+				$apiInfo['primaryForegroundColor'] = $theme->primaryForegroundColor;
+				$apiInfo['secondaryBackgroundColor'] = $theme->secondaryBackgroundColor;
+				$apiInfo['secondaryForegroundColor'] = $theme->secondaryForegroundColor;
+				$apiInfo['tertiaryBackgroundColor'] = $theme->tertiaryBackgroundColor;
+				$apiInfo['tertiaryForegroundColor'] = $theme->tertiaryForegroundColor;
 			}
-			if ($activeTheme->favicon) {
-				$apiInfo['favicon'] = $configArray['Site']['url'] . '/files/original/' . $activeTheme->favicon;
-			}
-			if ($activeTheme->logoApp) {
-				$apiInfo['logoApp'] = $configArray['Site']['url'] . '/files/original/' . $activeTheme->logoApp;
-			}
-			$apiInfo['primaryBackgroundColor'] = $activeTheme->primaryBackgroundColor;
-			$apiInfo['primaryForegroundColor'] = $activeTheme->primaryForegroundColor;
-			$apiInfo['secondaryBackgroundColor'] = $activeTheme->secondaryBackgroundColor;
-			$apiInfo['secondaryForegroundColor'] = $activeTheme->secondaryForegroundColor;
-			$apiInfo['tertiaryBackgroundColor'] = $activeTheme->tertiaryBackgroundColor;
-			$apiInfo['tertiaryForegroundColor'] = $activeTheme->tertiaryForegroundColor;
 		}
 		$locations = $this->getLocations();
 		$apiInfo['locations'] = [];

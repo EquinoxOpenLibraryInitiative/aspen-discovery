@@ -19,6 +19,15 @@ class UserAPI extends Action {
 		//header('Content-type: text/html');
 		header('Expires: Mon, 26 Jul 1997 05:00:00 GMT'); // Date in the past
 
+		global $activeLanguage;
+		if (isset($_GET['language'])) {
+			$language = new Language();
+			$language->code = $_GET['language'];
+			if ($language->find(true)) {
+				$activeLanguage = $language;
+			}
+		}
+
 		if (isset($_SERVER['PHP_AUTH_USER'])) {
 			if ($this->grantTokenAccess()) {
 				if (in_array($method, [
@@ -70,7 +79,8 @@ class UserAPI extends Action {
 					'optOutOfReadingHistory',
 					'deleteAllFromReadingHistory',
 					'deleteSelectedFromReadingHistory',
-					'getReadingHistorySortOptions'
+					'getReadingHistorySortOptions',
+					'confirmHold'
 				])) {
 					header("Cache-Control: max-age=10800");
 					require_once ROOT_DIR . '/sys/SystemLogging/APIUsage.php';
@@ -795,6 +805,12 @@ class UserAPI extends Action {
 			if($promptForHoldNotifications) {
 				$userData->holdNotificationInfo = $user->getCatalogDriver()->loadHoldNotificationInfo($user);
 			}
+
+			$userData->summaryFines = translate([
+				'text' => 'Your accounts have %1% in fines',
+				1 => $userData->fines,
+				'isPublicFacing' => true,
+			]);
 
 			return [
 				'success' => true,
@@ -1701,21 +1717,15 @@ class UserAPI extends Action {
 						}
 						$result = $user->placeItemHold($shortId, $_REQUEST['itemId'], $pickupBranch, $cancelDate);
 						$action = $result['api']['action'] ?? null;
+						$responseMessage = strip_tags($result['api']['message']);
+						$responseMessage = trim($responseMessage);
 						return [
 							'success' => $result['success'],
 							'title' => $result['api']['title'],
-							'message' => $result['api']['message'],
+							'message' => $responseMessage,
 							'action' => $action,
-						];
-					} else {
-						if (isset($_REQUEST['volumeId']) && $holdType == 'volume') {
-							$result = $user->placeVolumeHold($bibId, $_REQUEST['volumeId'], $pickupBranch);
-							$action = $result['api']['action'] ?? null;
-							return [
-								'success' => $result['success'],
-								'title' => $result['api']['title'],
-								'message' => $result['api']['message'],
-								'action' => $action,
+							'confirmationNeeded' => $result['api']['confirmationNeeded'] ?? false,
+							'confirmationId' => $result['api']['confirmationId'] ?? null,
 							];
 						} else {
 							//Make sure that there are not volumes available
@@ -1734,14 +1744,17 @@ class UserAPI extends Action {
 							}
 							$result = $user->placeHold($bibId, $pickupBranch, $cancelDate);
 							$action = $result['api']['action'] ?? null;
+							$responseMessage = strip_tags($result['api']['message']);
+							$responseMessage = trim($responseMessage);
 							return [
 								'success' => $result['success'],
 								'title' => $result['api']['title'],
-								'message' => $result['api']['message'],
+								'message' => $responseMessage,
 								'action' => $action,
+								'confirmationNeeded' => $result['api']['confirmationNeeded'] ?? false,
+								'confirmationId' => $result['api']['confirmationId'] ?? null,
 							];
 						}
-					}
 				} elseif ($source == 'overdrive') {
 					return $this->placeOverDriveHold();
 				} elseif ($source == 'cloud_library') {
@@ -1875,6 +1888,32 @@ class UserAPI extends Action {
 				return [
 					'success' => false,
 					'message' => 'Patron is not connected to an ILS.',
+				];
+			}
+		} else {
+			return [
+				'success' => false,
+				'message' => 'Login unsuccessful',
+			];
+		}
+	}
+
+	function confirmHold(): array {
+		$user = $this->getUserForApiCall();
+		if ($user && !($user instanceof AspenError)) {
+			$confirmationId = $_REQUEST['confirmationId'] ?? null;
+			$recordId = $_REQUEST['id'] ?? null;
+			if($confirmationId && $recordId) {
+				$result = $user->confirmHold($recordId, $confirmationId);
+				return [
+					'success' => $result['success'],
+					'title' => $result['api']['title'],
+					'message' => $result['api']['message'],
+				];
+			} else {
+				return [
+					'success' => false,
+					'message' => 'You must provide a record and confirmation id to confirm this hold.',
 				];
 			}
 		} else {
@@ -4075,6 +4114,7 @@ class UserAPI extends Action {
 	 * @return bool|User
 	 */
 	protected function getUserForApiCall() {
+		$user = false;
 		if ($this->getLiDAVersion() === "v22.04.00") {
 			[
 				$username,
@@ -4095,18 +4135,22 @@ class UserAPI extends Action {
 			if (!$user->find(true)) {
 				$user = false;
 			}
-		} elseif (isset($_REQUEST['id'])) {
+		} elseif (isset($_REQUEST['id']) && is_numeric($_REQUEST['id']) && $_REQUEST['id'] != 0) {
 			$user = new User();
 			$user->id = $_REQUEST['id'];
 			if (!$user->find(true)) {
 				$user = false;
 			}
-		} else {
+		}
+		if ($user === false) {
 			[
 				$username,
 				$password,
 			] = $this->loadUsernameAndPassword();
 			$user = UserAccount::validateAccount($username, $password);
+		}
+		if ($user !== false && $user->source == 'admin') {
+			return false;
 		}
 		return $user;
 	}
@@ -4715,6 +4759,21 @@ class UserAPI extends Action {
 										'isAdminFacing' => true,
 									]),
 								];
+							}
+						} else {
+							//Call find new user just to be sure that all patron information is up to date.
+							$tmpUser = UserAccount::findNewUser($libraryCard);
+							if (!$tmpUser) {
+								//This user no longer exists? return an error?
+								return [
+									'success' => false,
+									'error' => translate([
+										'text' => 'User no longer exists in the ILS',
+										'isAdminFacing' => true,
+									]),
+								];
+							} else {
+								$masqueradedUser = $tmpUser;
 							}
 						}
 

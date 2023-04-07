@@ -178,30 +178,34 @@ abstract class SearchObject_SolrSearcher extends SearchObject_BaseSearcher {
 		global $interface;
 		$html = [];
 		global $solrScope;
-		for ($x = 0; $x < count($this->indexResult['response']['docs']); $x++) {
-			$current = &$this->indexResult['response']['docs'][$x];
-			$interface->assign('recordIndex', $x + 1);
-			$interface->assign('resultIndex', $x + 1 + (($this->page - 1) * $this->limit));
-			if (!empty($this->searchId)) {
-				if (isset($current["local_time_since_added_$solrScope"])) {
-					$interface->assign('isNew', in_array('Week', $current["local_time_since_added_$solrScope"]));
+		if (!empty($this->indexResult['response']['docs'])){
+			for ($x = 0; $x < count($this->indexResult['response']['docs']); $x++) {
+				$current = &$this->indexResult['response']['docs'][$x];
+				$interface->assign('recordIndex', $x + 1);
+				$interface->assign('resultIndex', $x + 1 + (($this->page - 1) * $this->limit));
+				if (!empty($this->searchId)) {
+					if (isset($current["local_time_since_added_$solrScope"])) {
+						$interface->assign('isNew', in_array('Week', $current["local_time_since_added_$solrScope"]));
+					} else {
+						$interface->assign('isNew', false);
+					}
 				} else {
 					$interface->assign('isNew', false);
 				}
-			} else {
-				$interface->assign('isNew', false);
-			}
-			$record = $this->getRecordDriverForResult($current);
-			if (!($record instanceof AspenError)) {
-				if (method_exists($record, 'getBrowseResult')) {
-					$html['GroupedWork' . $current['id']] = $interface->fetch($record->getBrowseResult());
-				} else {
-					$html['GroupedWork' . $current['id']] = 'Browse Result not available';
-				}
+				$record = $this->getRecordDriverForResult($current);
+				if (!($record instanceof AspenError)) {
+					if (method_exists($record, 'getBrowseResult')) {
+						$html['GroupedWork' . $current['id']] = $interface->fetch($record->getBrowseResult());
+					} else {
+						$html['GroupedWork' . $current['id']] = 'Browse Result not available';
+					}
 
-			} else {
-				$html['GroupedWork' . $current['id']] = "Browse Result not available";
+				} else {
+					$html['GroupedWork' . $current['id']] = "Browse Result not available";
+				}
 			}
+		}else {
+			$html[] = "Browse Result not available";
 		}
 		return $html;
 	}
@@ -521,9 +525,14 @@ abstract class SearchObject_SolrSearcher extends SearchObject_BaseSearcher {
 			// Advanced search
 		} else {
 			foreach ($this->searchTerms as $search) {
-				foreach ($search['group'] as $field) {
-					// Add just the search terms to the list
-					$this->spellQuery[] = $field['lookfor'];
+				if (isset($search['group'])) {
+					foreach ($search['group'] as $field) {
+						// Add just the search terms to the list
+						$this->spellQuery[] = $field['lookfor'];
+					}
+				}else{
+					//This happens while restoring author searches
+					$this->spellQuery[] = $search['lookfor'];
 				}
 			}
 			// Return the list put together as a string
@@ -922,5 +931,9 @@ abstract class SearchObject_SolrSearcher extends SearchObject_BaseSearcher {
 			}
 		}
 		return $spotlightResults;
+	}
+
+	public function hasSearchableFacets() : bool {
+		return true;
 	}
 }

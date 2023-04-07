@@ -17,14 +17,11 @@ import { enableScreens } from 'react-native-screens';
 //import * as Sentry from '@sentry/react-native';
 import * as Sentry from 'sentry-expo';
 
-import Login from '../screens/Auth/Login';
-import { translate } from '../translations/translations';
-import { createAuthTokens, getHeaders } from '../util/apiAuth';
+import Login, {LoginScreen} from '../screens/Auth/Login';
 import { GLOBALS } from '../util/globals';
-import { formatDiscoveryVersion, LIBRARY } from '../util/loadLibrary';
+import { LIBRARY } from '../util/loadLibrary';
 import { PATRON } from '../util/loadPatron';
 import { checkCachedUrl } from '../util/login';
-import { popAlert, popToast } from './loadError';
 import LaunchStackNavigator from '../navigations/LaunchStackNavigator';
 import {BrowseCategoryProvider, CheckoutsProvider, GroupedWorkProvider, HoldsProvider, LanguageProvider, LibraryBranchProvider, LibrarySystemProvider, UserProvider} from '../context/initialContext';
 import { SplashScreen } from '../screens/Auth/Splash';
@@ -33,6 +30,7 @@ import { Platform } from 'react-native';
 import { navigationRef } from '../helpers/RootNavigator';
 import {updateAspenLiDABuild} from '../util/greenhouse';
 import {ResetExpiredPin} from '../screens/Auth/ResetExpiredPin';
+import {PermissionsPrompt} from './PermissionsPrompt';
 
 const prefix = Linking.createURL('/');
 console.log(prefix);
@@ -92,7 +90,6 @@ export function App() {
                background: screenBackgroundColor,
           },
      };
-
      const [state, dispatch] = React.useReducer(
           (prevState, action) => {
                switch (action.type) {
@@ -150,8 +147,6 @@ export function App() {
 
      React.useEffect(() => {
           const bootstrapAsync = async () => {
-               await getPermissions();
-
                console.log('Checking updates...');
                if(Updates.manifest) {
                     await updateAspenLiDABuild(Updates.updateId, Updates.channel, Updates.createdAt);
@@ -345,7 +340,7 @@ export function App() {
                                                                      // No token found, user isn't signed in
                                                                      <Stack.Screen
                                                                          name="Login"
-                                                                         component={Login}
+                                                                         component={LoginScreen}
                                                                          options={{
                                                                               headerShown: false,
                                                                               animationTypeForReplace: state.isSignout ? 'pop' : 'push',
@@ -374,43 +369,6 @@ export function App() {
                </LanguageProvider>
           </AuthContext.Provider>
      );
-}
-
-async function getPermissions() {
-     /* temporarily disabling geolocation on Android due to a fatal bug */
-     if(Platform.OS === 'android') {
-          await SecureStore.setItemAsync('latitude', '0');
-          await SecureStore.setItemAsync('longitude', '0');
-          PATRON.coords.lat = 0;
-          PATRON.coords.long = 0;
-          return false;
-     } else {
-          const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== 'granted') {
-               await SecureStore.setItemAsync('latitude', '0');
-               await SecureStore.setItemAsync('longitude', '0');
-               PATRON.coords.lat = 0;
-               PATRON.coords.long = 0;
-               return false;
-          }
-
-          const location = await Location.getLastKnownPositionAsync({});
-
-          if (location != null) {
-               const latitude = JSON.stringify(location.coords.latitude);
-               const longitude = JSON.stringify(location.coords.longitude);
-               await SecureStore.setItemAsync('latitude', latitude);
-               await SecureStore.setItemAsync('longitude', longitude);
-               PATRON.coords.lat = latitude;
-               PATRON.coords.long = longitude;
-          } else {
-               await SecureStore.setItemAsync('latitude', '0');
-               await SecureStore.setItemAsync('longitude', '0');
-               PATRON.coords.lat = 0;
-               PATRON.coords.long = 0;
-          }
-          return true;
-     }
 }
 
 export default Sentry.Native.wrap(App);

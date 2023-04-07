@@ -245,6 +245,9 @@ table {
   .table-bordered td {
     border: 1px solid #ddd !important;
   }
+  #page-menu-bar {
+    display: none;
+  }
 }
 *,
 *:before,
@@ -8732,8 +8735,8 @@ a.placard-link {
 }
 #horizontal-search-box #lookfor {
   height: 34px;
-  width: calc(100% - 35px);
-  display: inline-block;
+  /*width: calc(100% - 35px);
+    display: inline-block;*/
 }
 #horizontal-search-box #lookfor:focus {
   border-color: #66afe9;
@@ -10128,7 +10131,6 @@ a.browse-thumbnail-sorted.active {
   color: #c62828;
 }
 .itemSummaryTable tr.available {
-  color: #2e7d32;
   font-weight: bold;
 }
 .itemSummary {

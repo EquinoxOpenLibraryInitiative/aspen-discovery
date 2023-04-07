@@ -69,6 +69,10 @@ class BookCoverProcessor {
 			if ($this->getSpringshareLibCalCover($this->id)) {
 				return true;
 			}
+		} elseif ($this->type == 'communico_event') {
+			if ($this->getCommunicoCover($this->id)){
+				return true;
+			}
 		} elseif ($this->type == 'webpage' || $this->type == 'WebPage' || $this->type == 'BasicPage' || $this->type == 'WebResource' || $this->type == 'PortalPage') {
 			if ($this->getWebPageCover($this->id)) {
 				return true;
@@ -413,14 +417,10 @@ class BookCoverProcessor {
 		$this->bookCoverInfo = new BookCoverInfo();
 		//First check to see if this has a custom cover due to being an e-book
 		if (!empty($this->id)) {
-			if ($this->isEContent) {
-				$this->cacheName = 'econtent' . $this->id;
+			if ($this->type == 'grouped_work') {
+				$this->cacheName = $this->id;
 			} else {
-				if ($this->type == 'grouped_work') {
-					$this->cacheName = $this->id;
-				} else {
-					$this->cacheName = $this->type . '_' . $this->id;
-				}
+				$this->cacheName = $this->type . '_' . $this->id;
 			}
 			$this->bookCoverInfo->recordId = $this->id;
 			$this->bookCoverInfo->recordType = $this->type;
@@ -1514,6 +1514,27 @@ class BookCoverProcessor {
 		return false;
 	}
 
+	private function getCommunicoCover($id) {
+		if (strpos($id, ':') !== false) {
+			[
+				,
+				$id,
+			] = explode(":", $id);
+		}
+		require_once ROOT_DIR . '/RecordDrivers/CommunicoEventRecordDriver.php';
+		$driver = new CommunicoEventRecordDriver($id);
+		if ($driver) {
+			require_once ROOT_DIR . '/sys/Covers/EventCoverBuilder.php';
+			$coverBuilder = new EventCoverBuilder();
+			$props = [
+				'eventDate' => $driver->getStartDate(),
+			];
+			$coverBuilder->getCover($driver->getTitle(), $this->cacheFile, $props);
+			return $this->processImageURL('default_event', $this->cacheFile, false);
+		}
+		return false;
+	}
+
 	private function getWebPageCover($id) {
 		//Build a cover based on the title of the page
 		require_once ROOT_DIR . '/sys/Covers/WebPageCoverBuilder.php';
@@ -1552,7 +1573,31 @@ class BookCoverProcessor {
 	}
 
 	private function getUploadedGroupedWorkCover($permanentId) {
-		if($this->bookCoverInfo->imageSource == 'upload') {
+		$okToLoad = false;
+		if($this->type == 'grouped_work' && $this->bookCoverInfo->imageSource == 'upload') {
+			$okToLoad = true;
+		}else{
+			$bookCoverInfo = new BookCoverInfo();
+			$bookCoverInfo->recordType = 'grouped_work';
+			$bookCoverInfo->recordId = $permanentId;
+			if ($bookCoverInfo->find(true)) {
+				if ($bookCoverInfo->imageSource == 'upload') {
+					$okToLoad = true;
+				}
+			}
+			if (!$okToLoad && strlen($permanentId) == 40) {
+				$bookCoverInfo = new BookCoverInfo();
+				$bookCoverInfo->recordType = 'grouped_work';
+				$bookCoverInfo->recordId = substr($permanentId, 0, 36);
+				if ($bookCoverInfo->find(true)) {
+					if ($bookCoverInfo->imageSource == 'upload') {
+						$okToLoad = true;
+					}
+				}
+			}
+		}
+
+		if ($okToLoad) {
 			$uploadedImage = $this->bookCoverPath . '/original/' . $permanentId . '.png';
 			if (file_exists($uploadedImage)) {
 				return $this->processImageURL('upload', $uploadedImage);

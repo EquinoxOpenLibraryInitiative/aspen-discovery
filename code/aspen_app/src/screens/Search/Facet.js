@@ -16,19 +16,20 @@ import { ScrollView } from "react-native";
 
 import { loadingSpinner } from "../../components/loadingSpinner";
 import { userContext } from "../../context/user";
-import { translate } from "../../translations/translations";
 import {
   addAppliedFilter,
   buildParamsForUrl,
   removeAppliedFilter,
-  SEARCH,
-} from "../../util/search";
+  SEARCH, searchAvailableFacets,
+} from '../../util/search';
 import Facet_Checkbox from "./Facets/Checkbox";
 import Facet_RadioGroup from "./Facets/RadioGroup";
 import Facet_Rating from "./Facets/Rating";
 import Facet_Slider from "./Facets/Slider";
 import Facet_Year from "./Facets/Year";
 import { UnsavedChangesExit } from "./UnsavedChanges";
+import {getTermFromDictionary} from '../../translations/TranslationService';
+import {LIBRARY} from '../../util/loadLibrary';
 
 export default class Facet extends Component {
   static contextType = userContext;
@@ -41,6 +42,7 @@ export default class Facet extends Component {
       data: this.props.route.params?.data ?? [],
       title: this.props.route.params?.extra["label"] ?? "Filter",
       facets: this.props.route.params?.facets ?? [],
+      facetsOriginal: this.props.route.params?.facets ?? [],
       numFacets: 0,
       category: this.props.route.params?.extra["field"] ?? "",
       applied: [],
@@ -54,6 +56,7 @@ export default class Facet extends Component {
       values: [],
       pending: [],
       valuesDefault: [],
+      language: this.props.route.params?.language ?? 'en',
     };
     this._isMounted = false;
   }
@@ -105,6 +108,7 @@ export default class Facet extends Component {
             discardChanges={this.discardChanges}
             updateGlobal={this.updateGlobal}
             prevRoute="Filters"
+            language={this.state.language}
           />
         ),
       });
@@ -116,6 +120,7 @@ export default class Facet extends Component {
             updateSearch={this.updateSearch}
             discardChanges={this.discardChanges}
             prevRoute="Filters"
+            language={this.state.language}
           />
         ),
       });
@@ -126,41 +131,59 @@ export default class Facet extends Component {
     this._isMounted = false;
   }
 
-  filter(list, sorted = false) {
-    const filterByQuery = this.state.filterByQuery;
-    //todo: add method to use api endpoint to get more results to filter through by query
-    if (sorted) {
-      const sortedList = _.orderBy(
-        list,
-        ["isApplied", "count", "display"],
-        ["desc", "desc", "asc"]
-      );
-      return _.filter(sortedList, function (facet) {
-        return facet.display.indexOf(filterByQuery) > -1;
-      });
-    }
+  async filterFacets() {
+    await searchAvailableFacets(this.state.category, this.state.title, this.state.filterByQuery, LIBRARY.url, this.state.language).then(result => {
+      if(result.success === false) {
+        this.setState({
+          isLoading: false
+        })
+      } else {
+        this.setState({
+          facets: result["facets"],
+          numFacets: _.size(result["facets"]),
+		  isLoading: false
+        })
+      }
+    })
+    /*     if (sorted) {
+     const sortedList = _.orderBy(
+     list,
+     ["isApplied", "count", "display"],
+     ["desc", "desc", "asc"]
+     );
+     return _.filter(sortedList, function (facet) {
+     return facet.display.indexOf(filterByQuery) > -1;
+     });
+     }
 
-    return _.filter(list, function (facet) {
-      return facet.display.indexOf(filterByQuery) > -1;
-    });
+     return _.filter(list, function (facet) {
+     return facet.display.indexOf(filterByQuery) > -1;
+     }); */
   }
 
   searchBar = () => {
-    //todo: add searchbar to >10 results when able to filter thru every facet properly
-    if (this.state.numFacets > 105) {
-      const placeHolder = translate("search.title") + " " + this.state.title;
+    const placeHolder = getTermFromDictionary(this.state.language, 'search') + " " + this.state.title;
+    /* always display the search bar */
+    if (this.state.numFacets >= 0) {
       return (
-        <Box safeArea={5}>
-          <Input
-            name="filterSearchBar"
-            onChangeText={(filterByQuery) => this.setState({ filterByQuery })}
-            size="lg"
-            autoCorrect={false}
-            variant="outline"
-            returnKeyType="search"
-            placeholder={placeHolder}
-          />
-        </Box>
+          <Box safeArea={5}>
+            <Input
+                value={this.state.filterByQuery}
+                name="filterSearchBar"
+                onChangeText={(filterByQuery) => this.setState({filterByQuery})}
+                size="lg"
+                autoCorrect={false}
+                variant="outline"
+                returnKeyType="search"
+                placeholder={placeHolder}
+                onSubmitEditing={async () => {
+					this.setState({
+						isLoading: true,
+					});
+                  await this.filterFacets();
+                }}
+            />
+          </Box>
       );
     } else {
       return <Box pb={5} />;
@@ -258,16 +281,16 @@ export default class Facet extends Component {
         <Center>
           <Button.Group size="lg">
             <Button variant="unstyled" onPress={() => this.resetCluster()}>
-              {translate("general.reset")}
+              {getTermFromDictionary(this.state.language, 'reset')}
             </Button>
             <Button
               isLoading={this.state.isUpdating}
-              isLoadingText={translate("general.updating")}
+              isLoadingText={getTermFromDictionary(this.state.language, 'updating', true)}
               onPress={() => {
                 this.updateSearch();
               }}
             >
-              {translate("general.update")}
+              {getTermFromDictionary(this.state.language, 'update')}
             </Button>
           </Button.Group>
         </Center>
@@ -296,6 +319,7 @@ export default class Facet extends Component {
                 category={category}
                 updater={this.updateLocalValues}
                 data={facets}
+                language={this.state.language}
               />
             </Box>
           </ScrollView>
@@ -330,6 +354,7 @@ export default class Facet extends Component {
                 category={category}
                 data={facets}
                 updater={this.updateLocalValues}
+                language={this.state.language}
               />
             </Box>
           </ScrollView>
@@ -345,11 +370,11 @@ export default class Facet extends Component {
               <Checkbox.Group
                 name={category}
                 value={this.state.values}
-                accessibilityLabel={translate("filters.filter_by")}
+                accessibilityLabel={getTermFromDictionary(this.state.language, 'filter_by')}
                 onChange={(values) => this.updateLocalValues(category, values)}
               >
-                {this.filter(facets, true).map((item, index, array) => (
-                  <Facet_Checkbox key={index} data={item} />
+                {facets.map((item, index, array) => (
+                  <Facet_Checkbox key={index} data={item} language={this.state.language}/>
                 ))}
               </Checkbox.Group>
             </Box>
@@ -369,6 +394,7 @@ export default class Facet extends Component {
                 title={this.state.title}
                 applied={this.state.values}
                 updater={this.updateLocalValues}
+                language={this.state.language}
               />
             </Box>
           </ScrollView>

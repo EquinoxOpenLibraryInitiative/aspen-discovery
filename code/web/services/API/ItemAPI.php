@@ -33,6 +33,15 @@ class ItemAPI extends Action {
 		header('Cache-Control: no-cache, must-revalidate'); // HTTP/1.1
 		header('Expires: Mon, 26 Jul 1997 05:00:00 GMT'); // Date in the past
 
+		global $activeLanguage;
+		if (isset($_GET['language'])) {
+			$language = new Language();
+			$language->code = $_GET['language'];
+			if ($language->find(true)) {
+				$activeLanguage = $language;
+			}
+		}
+
 		if (isset($_SERVER['PHP_AUTH_USER'])) {
 			if ($this->grantTokenAccess()) {
 				if (in_array($method, [
@@ -44,7 +53,8 @@ class ItemAPI extends Action {
 					'getVariations',
 					'getRecords',
 					'getVolumes',
-					'getRelatedRecord'
+					'getRelatedRecord',
+					'getCopies'
 				])) {
 					header("Cache-Control: max-age=10800");
 					require_once ROOT_DIR . '/sys/SystemLogging/APIUsage.php';
@@ -320,6 +330,40 @@ class ItemAPI extends Action {
 		$itemData['ratingData'] = $ratingData;
 
 		return $itemData;
+	}
+
+	/** @noinspection PhpUnused */
+	function getCopies() {
+		if (!isset($_REQUEST['recordId'])) {
+			return [
+				'success' => false,
+				'message' => 'Record id not provided'
+			];
+		}
+
+		$id = $_REQUEST['recordId'];
+		$recordId = explode(':', $id);
+		$id = $recordId[1];
+		$source = $recordId[0];
+
+		require_once ROOT_DIR . '/RecordDrivers/MarcRecordDriver.php';
+		$marcRecord = new MarcRecordDriver($id);
+
+		$copies = $marcRecord->getCopies();
+		$items = [];
+		foreach($copies as $copy) {
+			$items[$copy['description']]['id'] = $copy['itemId'];
+			$items[$copy['description']]['location'] = $copy['description'];
+			$items[$copy['description']]['library'] = $copy['section'];
+			$items[$copy['description']]['volume'] = $copy['volume'];
+			$items[$copy['description']]['volumeId'] = $copy['volumeId'];
+			$items[$copy['description']]['variationId'] = $copy['variationId'];
+		}
+		return [
+			'success' => true,
+			'recordId' => $_REQUEST['recordId'],
+			'copies' => $items,
+		];
 	}
 
 	/** @noinspection PhpUnused */
@@ -995,7 +1039,7 @@ class ItemAPI extends Action {
 		return [
 			'success' => true,
 			'id' => $groupedWorkId,
-			'format' => $format,
+			'format' => translate(['text' => $format, 'isPublicFacing' => true]),
 			'manifestation' => $relatedManifestation->getItemSummary(),
 		];
 	}
@@ -1065,10 +1109,24 @@ class ItemAPI extends Action {
 		$variations = [];
 		foreach($relatedManifestation->getVariations() as $relatedVariation) {
 			$relatedRecord = $relatedVariation->getFirstRecord();
+
+			$holdType = 'item';
+			global $indexingProfiles;
+			$indexingProfile = $indexingProfiles[$marcRecord->getRecordType()];
+			$formatMap = $indexingProfile->formatMap;
+			/** @var FormatMapValue $formatMapValue */
+			foreach ($formatMap as $formatMapValue) {
+				if($formatMapValue->format === $format) {
+					$holdType = $formatMapValue->holdType;
+				}
+			}
+
 			$variations[$relatedVariation->label]['id'] = $relatedRecord->id;
 			$variations[$relatedVariation->label]['source'] = $relatedRecord->source;
 			$variations[$relatedVariation->label]['closedCaptioned'] = (int) $relatedRecord->closedCaptioned;
 			$variations[$relatedVariation->label]['actions'] = $relatedVariation->getActions();
+			$variations[$relatedVariation->label]['variationId'] = $relatedVariation->databaseId;
+			$variations[$relatedVariation->label]['holdType'] = $holdType;
 			$variations[$relatedVariation->label]['statusIndicator'] = [
 				'isAvailable' => $relatedVariation->getStatusInformation()->isAvailable(),
 				'isEContent' => $relatedVariation->getStatusInformation()->isEContent(),
@@ -1091,7 +1149,7 @@ class ItemAPI extends Action {
 		return [
 			'success' => true,
 			'id' => $groupedWorkId,
-			'format' => $format,
+			'format' => translate(['text' => $format, 'isPublicFacing' => true]),
 			'variations' => $variations,
 			'alwaysPlaceVolumeHoldWhenVolumesArePresent' => $alwaysPlaceVolumeHoldWhenVolumesArePresent,
 			'localSystemName' => $library->displayName,
@@ -1129,7 +1187,7 @@ class ItemAPI extends Action {
 				$records[$relatedRecord->id]['id'] = $relatedRecord->id;
 				$records[$relatedRecord->id]['source'] = $relatedRecord->source;
 				$records[$relatedRecord->id]['recordId'] = $recordId;
-				$records[$relatedRecord->id]['format'] = $relatedRecord->format;
+				$records[$relatedRecord->id]['format'] = translate(['text' => $relatedRecord->format, 'isPublicFacing' => true]);
 				$records[$relatedRecord->id]['edition'] = $relatedRecord->edition;
 				$records[$relatedRecord->id]['publisher'] = $relatedRecord->publisher;
 				$records[$relatedRecord->id]['publicationDate'] = $relatedRecord->publicationDate;
@@ -1330,15 +1388,18 @@ class ItemAPI extends Action {
 		}
 
 		$volumes = [];
+		$i = 0;
 		foreach($volumeData as $volume) {
 			$label = $volume->displayLabel;
 			if($alwaysPlaceVolumeHoldWhenVolumesArePresent && $volume->hasLocalItems()) {
 				$label .= ' (' . translate(['text' => 'Owned by %1%', 'isPublicFacing' => true, 1=>$library->displayName]) . ')';
 			}
+			$volumes[$volume->id]['key'] = $i;
 			$volumes[$volume->id]['id'] = $volume->id;
 			$volumes[$volume->id]['label'] = $label;
 			$volumes[$volume->id]['displayOrder'] = $volume->displayOrder;
 			$volumes[$volume->id]['volumeId'] = $volume->volumeId;
+			$i++;
 		}
 
 		return [
@@ -1387,7 +1448,7 @@ class ItemAPI extends Action {
 			'success' => true,
 			'id' => $_REQUEST['id'],
 			'recordId' => $_REQUEST['record'],
-			'format' => $_REQUEST['format'],
+			'format' => translate(['text' => $_REQUEST['format'], 'isPublicFacing' => true]),
 			'record' => $summary,
 		];
 	}

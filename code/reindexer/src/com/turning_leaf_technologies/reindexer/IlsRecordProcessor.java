@@ -271,6 +271,8 @@ abstract class IlsRecordProcessor extends MarcRecordProcessor {
 
 			processRecordLinking = indexingProfileRS.getBoolean("processRecordLinking");
 
+			includePersonalAndCorporateNamesInTopics = indexingProfileRS.getBoolean("includePersonalAndCorporateNamesInTopics");
+
 			loadHoldsStmt = dbConn.prepareStatement("SELECT ilsId, numHolds from ils_hold_summary where ilsId = ?", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
 			addTranslationMapValueStmt = dbConn.prepareStatement("INSERT INTO translation_map_values (translationMapId, value, translation) VALUES (?, ?, ?)");
 			updateRecordSuppressionReasonStmt = dbConn.prepareStatement("UPDATE ils_records set suppressed=?, suppressionNotes=? where source=? and ilsId=?");
@@ -402,10 +404,13 @@ abstract class IlsRecordProcessor extends MarcRecordProcessor {
 			loadOnOrderItems(groupedWork, recordInfo, record, recordInfo.getNumPrintCopies() > 0);
 
 			//Now look for any eContent that is defined within the ils
-			loadUnsuppressedEContentItems(groupedWork, identifier, record, suppressionNotes, recordInfo, firstParentId != null, hasChildRecords);
+			List<RecordInfo> econtentRecords = loadUnsuppressedEContentItems(groupedWork, identifier, record, suppressionNotes, recordInfo, firstParentId != null, hasChildRecords);
+			if (econtentRecords.size() > 0) {
+				allRelatedRecords.addAll(econtentRecords);
+			}
 
 			if (hasChildRecords) {
-				//If we have child records, it's very likely that we don't have real items so we need to create a virtual one for scoping.
+				//If we have child records, it's very likely that we don't have real items, so we need to create a virtual one for scoping.
 				ItemInfo virtualItem = new ItemInfo();
 				virtualItem.setVirtual(true);
 				recordInfo.addItem(virtualItem);
@@ -796,7 +801,7 @@ abstract class IlsRecordProcessor extends MarcRecordProcessor {
 		return suppressionNotes;
 	}
 
-	boolean getIlsEContentItems(AbstractGroupedWorkSolr groupedWork, Record record, RecordInfo mainRecordInfo, String identifier, DataField itemField){
+	void getIlsEContentItems(Record record, RecordInfo mainRecordInfo, String identifier, DataField itemField){
 		ItemInfo itemInfo = new ItemInfo();
 		itemInfo.setIsEContent(true);
 
@@ -883,13 +888,6 @@ abstract class IlsRecordProcessor extends MarcRecordProcessor {
 
 		itemInfo.setDetailedStatus("Available Online");
 		itemInfo.setGroupedStatus("Available Online");
-
-		//If we don't get a URL, return null since it isn't valid
-		if (itemInfo.geteContentUrl() == null || itemInfo.geteContentUrl().length() == 0){
-			return false;
-		}else{
-			return true;
-		}
 	}
 
 	protected void loadDateAdded(String recordIdentifier, DataField itemField, ItemInfo itemInfo) {
@@ -898,6 +896,7 @@ abstract class IlsRecordProcessor extends MarcRecordProcessor {
 			if (dateAddedStr.equals("NEVER")) {
 				logger.info("Date Added was never");
 			}else {
+				dateAddedStr = dateAddedStr.trim();
 				try {
 					if (dateAddedFormatter == null) {
 						dateAddedFormatter = new SimpleDateFormat(dateAddedFormat);
@@ -914,10 +913,10 @@ abstract class IlsRecordProcessor extends MarcRecordProcessor {
 							Date dateAdded = dateAddedFormatter2.parse(dateAddedStr);
 							itemInfo.setDateAdded(dateAdded);
 						}catch (ParseException e2){
-							indexer.getLogEntry().addNote("Error processing date added for record identifier " + recordIdentifier + " profile " + profileType + " using format " + dateAddedFormat + " and yyMMdd " + e2);
+							indexer.getLogEntry().addNote("Error processing date added (" + dateAddedStr + ") for record identifier " + recordIdentifier + " profile " + profileType + " using both format " + dateAddedFormat + " and yyMMdd " + e2);
 						}
 					}else {
-						indexer.getLogEntry().addNote("Error processing date added for record identifier " + recordIdentifier + " profile " + profileType + " using format " + dateAddedFormat + " " + e);
+						indexer.getLogEntry().addNote("Error processing date (" + dateAddedStr + ") added for record identifier " + recordIdentifier + " profile " + profileType + " using format " + dateAddedFormat + " " + e);
 					}
 				}
 			}
@@ -1594,6 +1593,11 @@ abstract class IlsRecordProcessor extends MarcRecordProcessor {
 						if (recordUrl.getIndicator2() != '0' && recordUrl.getIndicator2() != '1') {
 							continue;
 						}
+						if (recordUrl.getIndicator2() == '1') {
+							if (recordUrl.getSubfield('3') != null) {
+								continue;
+							}
+						}
 						//Get the econtent source
 						String urlLower = url.toLowerCase();
 						String econtentSource;
@@ -1802,16 +1806,24 @@ abstract class IlsRecordProcessor extends MarcRecordProcessor {
 	void largePrintCheck(RecordInfo recordInfo, Record record){
 		HashSet<String> uniqueItemFormats = recordInfo.getUniqueItemFormats();
 		try {
-			if (checkRecordForLargePrint && (uniqueItemFormats.size() == 1) && uniqueItemFormats.iterator().next().equalsIgnoreCase("Book")) {
-				LinkedHashSet<String> printFormats = getFormatsFromBib(record, recordInfo);
-				if (printFormats.size() == 1 && printFormats.iterator().next().contains("LargePrint")) {
-					String translatedFormat = translateValue("format", "LargePrint", recordInfo.getRecordIdentifier());
-					for (ItemInfo item : recordInfo.getRelatedItems()) {
-						item.setFormat(null);
-						item.setFormatCategory(null);
+			if (checkRecordForLargePrint){
+				boolean doLargePrintCheck = false;
+				if ((uniqueItemFormats.size() == 1) && uniqueItemFormats.iterator().next().equalsIgnoreCase("Book")){
+					doLargePrintCheck = true;
+				}else if ((uniqueItemFormats.size() == 2) && uniqueItemFormats.contains("Book") && uniqueItemFormats.contains("Large Print")){
+					doLargePrintCheck = true;
+				}
+				if (doLargePrintCheck) {
+					LinkedHashSet<String> printFormats = getFormatsFromBib(record, recordInfo);
+					if (printFormats.size() == 1 && printFormats.iterator().next().contains("LargePrint")) {
+						String translatedFormat = translateValue("format", "LargePrint", recordInfo.getRecordIdentifier());
+						for (ItemInfo item : recordInfo.getRelatedItems()) {
+							item.setFormat(null);
+							item.setFormatCategory(null);
+						}
+						recordInfo.addFormat(translatedFormat);
+						recordInfo.addFormatCategory(translateValue("format_category", "LargePrint", recordInfo.getRecordIdentifier()));
 					}
-					recordInfo.addFormat(translatedFormat);
-					recordInfo.addFormatCategory(translateValue("format_category", "LargePrint", recordInfo.getRecordIdentifier()));
 				}
 			}
 		} catch (Exception e) {

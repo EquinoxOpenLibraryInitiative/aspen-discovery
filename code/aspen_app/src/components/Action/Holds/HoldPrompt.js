@@ -1,23 +1,29 @@
 import React from 'react';
-import {HoldsContext, LibrarySystemContext, UserContext} from '../../../context/initialContext';
-import { Button, Modal, Heading, Radio } from 'native-base';
-import {translate} from '../../../translations/translations';
+import {LibrarySystemContext, UserContext} from '../../../context/initialContext';
+import { Button, Modal, Heading, FormControl, Select, CheckIcon } from 'native-base';
 import _ from 'lodash';
 import {completeAction} from '../../../screens/GroupedWork/Record';
 import {refreshProfile} from '../../../util/api/user';
-import SelectPickupLocation from './SelectPickupLocation';
-import SelectLinkedAccount from './SelectLinkedAccount';
+import { useQuery } from '@tanstack/react-query';
 import {SelectVolume} from './SelectVolume';
 import {HoldNotificationPreferences} from './HoldNotificationPreferences';
+import {getTermFromDictionary} from '../../../translations/TranslationService';
+import {getCopies} from '../../../util/api/item';
+import {SelectItem} from './SelectItem';
 
 export const HoldPrompt = (props) => {
-	const {id, title, action, volumeInfo, prevRoute, isEContent, response, setResponse, responseIsOpen, setResponseIsOpen, onResponseClose, cancelResponseRef} = props;
+	const {language, id, title, action, volumeInfo, holdTypeForFormat, variationId, prevRoute, isEContent, response, setResponse, responseIsOpen, setResponseIsOpen, onResponseClose, cancelResponseRef, holdConfirmationResponse, setHoldConfirmationResponse, holdConfirmationIsOpen, setHoldConfirmationIsOpen, onHoldConfirmationClose, cancelHoldConfirmationRef} = props;
 	const [loading, setLoading] = React.useState(false);
 	const [showModal, setShowModal] = React.useState(false);
 
 	const { user, updateUser, accounts, locations } = React.useContext(UserContext);
 	const { library } = React.useContext(LibrarySystemContext);
-	const { updateHolds } = React.useContext(HoldsContext);
+
+	const { status, data, error, isFetching } = useQuery({
+		queryKey: ['copies', id, language, library.baseUrl],
+		queryFn: () => getCopies(id, language, library.baseUrl),
+		enabled: holdTypeForFormat === 'item' || holdTypeForFormat === 'either',
+	});
 
 	const isPlacingHold = action.includes('hold');
 	let promptForHoldNotifications = user.promptForHoldNotifications ?? false;
@@ -28,9 +34,9 @@ export const HoldPrompt = (props) => {
 	let defaultSMSNotification = false;
 	if(promptForHoldNotifications && holdNotificationInfo?.preferences?.opac_hold_notify?.value) {
 		const preferences = holdNotificationInfo.preferences.opac_hold_notify.value;
-		defaultEmailNotification = getNotificationPreference(preferences, 'email');
-		defaultPhoneNotification = getNotificationPreference(preferences, 'phone');
-		defaultSMSNotification = getNotificationPreference(preferences, 'sms');
+		defaultEmailNotification = _.includes(preferences, 'email');
+		defaultPhoneNotification = _.includes(preferences, 'phone');
+		defaultSMSNotification = _.includes(preferences, 'sms');
 	}
 
 	const [emailNotification, setEmailNotification] = React.useState(defaultEmailNotification);
@@ -39,7 +45,6 @@ export const HoldPrompt = (props) => {
 	const [smsCarrier, setSMSCarrier] = React.useState(holdNotificationInfo.preferences?.opac_default_sms_carrier?.value ?? -1);
 	const [smsNumber, setSMSNumber] = React.useState(holdNotificationInfo.preferences?.opac_default_sms_notify?.value ?? null);
 	const [phoneNumber, setPhoneNumber] = React.useState(holdNotificationInfo.preferences?.opac_default_phone?.value ?? null);
-
 	const holdNotificationPreferences = {
 		'emailNotification': emailNotification,
 		'phoneNotification': phoneNotification,
@@ -67,8 +72,9 @@ export const HoldPrompt = (props) => {
 
 	const [holdType, setHoldType] = React.useState(typeOfHold);
 	const [volume, setVolume] = React.useState('');
+	const [item, setItem] = React.useState('');
 
-	const [activeAccount, setActiveAccount] = React.useState(user.id);
+	const [activeAccount, setActiveAccount] = React.useState(user.id ?? '');
 
 	const userPickupLocation = _.filter(locations, { 'locationId': user.pickupLocationId });
 	let pickupLocation = '';
@@ -87,11 +93,12 @@ export const HoldPrompt = (props) => {
 			<Modal isOpen={showModal} onClose={() => setShowModal(false)} closeOnOverlayClick={false} size="lg">
 				<Modal.Content maxWidth="90%" bg="white" _dark={{ bg: 'coolGray.800' }}>
 					<Modal.CloseButton/>
-					<Modal.Header><Heading size="md">{isPlacingHold ? translate('grouped_work.hold_options') : translate('grouped_work.checkout_options')}</Heading></Modal.Header>
+					<Modal.Header><Heading size="md">{isPlacingHold ? getTermFromDictionary(language, 'hold_options') : getTermFromDictionary(language, 'checkout_options')}</Heading></Modal.Header>
 					<Modal.Body>
 						{promptForHoldNotifications ? (
 							<HoldNotificationPreferences
 								user={user}
+								language={language}
 								emailNotification={emailNotification}
 								setEmailNotification={setEmailNotification}
 								phoneNotification={phoneNotification}
@@ -106,32 +113,73 @@ export const HoldPrompt = (props) => {
 								setPhoneNumber={setPhoneNumber}
 							/>
 						) : null}
+						{!isFetching && (holdTypeForFormat === 'either' || holdTypeForFormat === 'item') ? (
+							<SelectItem
+								id={id}
+								item={item}
+								setItem={setItem}
+								language={language}
+								data={data}
+								holdType={holdType}
+								setHoldType={setHoldType}
+								holdTypeForFormat={holdTypeForFormat}
+								url={library.baseUrl}
+								showModal={showModal}
+							/>
+						) : null}
 						{promptForHoldType || holdType === 'volume' ? (
 							<SelectVolume
 								id={id}
+								language={language}
 								volume={volume}
 								setVolume={setVolume}
 								promptForHoldType={promptForHoldType}
 								holdType={holdType}
 								setHoldType={setHoldType}
 								showModal={showModal}
+								url={library.baseUrl}
 							/>
 						) : null}
-						{_.size(locations) > 1 && !isEContent ? (
-							<SelectPickupLocation
-								locations={locations}
-								location={location}
-								setLocation={setLocation}
-							/>
+						{_.isArray(locations) && _.size(locations) > 1 && !isEContent ? (
+							<FormControl>
+								<FormControl.Label>{getTermFromDictionary(language, 'select_pickup_location')}</FormControl.Label>
+								<Select
+									name="pickupLocations"
+									selectedValue={location}
+									minWidth="200"
+									_selectedItem={{
+										bg: 'tertiary.300',
+										endIcon: <CheckIcon size="5" />,
+									}}
+									mt={1}
+									mb={2}
+									onValueChange={(itemValue) => setLocation(itemValue)}>
+									{locations.map((location, index) => {
+										return <Select.Item label={location.name} value={location.code} key={index} />;
+									})}
+								</Select>
+							</FormControl>
 						) : null}
-						{_.size(accounts) > 0 ? (
-							<SelectLinkedAccount
-								activeAccount={activeAccount}
-								accounts={accounts}
-								setActiveAccount={setActiveAccount}
-								isPlacingHold={isPlacingHold}
-								user={user}
-							/>
+						{_.isArray(accounts) && _.size(accounts) > 0 ? (
+							<FormControl>
+								<FormControl.Label>{isPlacingHold ? getTermFromDictionary('en', 'linked_place_hold_for_account') : getTermFromDictionary('en', 'linked_checkout_to_account')}</FormControl.Label>
+								<Select
+									name="linkedAccount"
+									selectedValue={activeAccount}
+									minWidth="200"
+									_selectedItem={{
+										bg: 'tertiary.300',
+										endIcon: <CheckIcon size="5" />,
+									}}
+									mt={1}
+									mb={3}
+									onValueChange={(itemValue) => setActiveAccount(itemValue)}>
+									<Select.Item label={user.displayName} value={user.id} />
+									{accounts.map((item, index) => {
+										return <Select.Item label={item.displayName} value={item.id} key={index} />;
+									})}
+								</Select>
+							</FormControl>
 						) : null}
 					</Modal.Body>
 					<Modal.Footer>
@@ -143,22 +191,41 @@ export const HoldPrompt = (props) => {
 									setShowModal(false);
 									setLoading(false);
 								}}>
-								{translate('general.close_window')}
+								{getTermFromDictionary(language, 'close_window')}
 							</Button>
 							<Button
 								isLoading={loading}
-								isLoadingText={isPlacingHold ? "Placing hold..." : "Checking out..."}
 								onPress={async () => {
 									setLoading(true);
-									await completeAction(id, action, activeAccount, '', '', location, library.baseUrl, volume, holdType, holdNotificationPreferences).then(async (result) => {
+									await completeAction(id, action, activeAccount, '', '', location, library.baseUrl, volume, holdType, holdNotificationPreferences, item).then(async (result) => {
 										setResponse(result);
 										setShowModal(false);
 										if(result) {
 											setResponseIsOpen(true);
-											if(result.success) {
+											if(result.success === true || result.success === "true") {
 												await refreshProfile(library.baseUrl).then((profile) => {
 													updateUser(profile);
 												});
+											}
+
+											if(result?.confirmationNeeded && result.confirmationNeeded === true) {
+												let tmp = holdConfirmationResponse;
+												const obj = {
+													message: result.message,
+													title: result.title,
+													confirmationNeeded: result.confirmationNeeded ?? false,
+													confirmationId: result.confirmationId ?? null,
+													recordId: id ?? null,
+												}
+												tmp = _.merge(obj, tmp);
+												setHoldConfirmationResponse(tmp);
+											}
+
+											setLoading(false);
+											if(result?.confirmationNeeded && result.confirmationNeeded) {
+												setHoldConfirmationIsOpen(true)
+											} else {
+												setResponseIsOpen(true);
 											}
 										}
 									});
@@ -172,11 +239,4 @@ export const HoldPrompt = (props) => {
 			</Modal>
 		</>
 	)
-}
-
-function getNotificationPreference(haystack, needle) {
-	if(_.includes(haystack, needle)) {
-		return true;
-	}
-	return false;
 }

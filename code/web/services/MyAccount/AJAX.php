@@ -1276,6 +1276,29 @@ class MyAccount_AJAX extends JSON_Action {
 							if ($list->find(true)) {
 								$userListEntry->title = substr($list->title, 0, 50);
 							}
+						} elseif ($userListEntry->source == 'Events') {
+							if (preg_match('`^communico`', $userListEntry->sourceId)){
+								require_once ROOT_DIR . '/RecordDrivers/CommunicoEventRecordDriver.php';
+								$recordDriver = new CommunicoEventRecordDriver($userListEntry->sourceId);
+								if ($recordDriver->isValid()) {
+									$title = $recordDriver->getTitle();
+									$userListEntry->title = substr($title, 0, 50);
+								}
+							} elseif (preg_match('`^libcal`', $userListEntry->sourceId)){
+								require_once ROOT_DIR . '/RecordDrivers/SpringshareLibCalEventRecordDriver.php';
+								$recordDriver = new SpringshareLibCalEventRecordDriver($userListEntry->sourceId);
+								if ($recordDriver->isValid()) {
+									$title = $recordDriver->getTitle();
+									$userListEntry->title = substr($title, 0, 50);
+								}
+							} else {
+								require_once ROOT_DIR . '/RecordDrivers/LibraryCalendarEventRecordDriver.php';
+								$recordDriver = new LibraryCalendarEventRecordDriver($userListEntry->sourceId);
+								if ($recordDriver->isValid()) {
+									$title = $recordDriver->getTitle();
+									$userListEntry->title = substr($title, 0, 50);
+								}
+							}
 						} elseif ($userListEntry->source == 'OpenArchives') {
 							require_once ROOT_DIR . '/RecordDrivers/OpenArchivesRecordDriver.php';
 							$recordDriver = new OpenArchivesRecordDriver($userListEntry->sourceId);
@@ -2068,7 +2091,8 @@ class MyAccount_AJAX extends JSON_Action {
 				if ($interface->getVariable('expirationNearMessage')) {
 					$interface->assign('expirationNearMessage', str_replace('%date%', date('M j, Y', $ilsSummary->expirationDate), $interface->getVariable('expirationNearMessage')));
 				}
-				$ilsSummary->setExpirationFinesNotice($interface->fetch('MyAccount/expirationFinesNotice.tpl'));
+				$ilsSummary->setExpirationNotice($interface->fetch('MyAccount/expirationNotice.tpl'));
+				$ilsSummary->setFinesBadge($interface->fetch('MyAccount/finesBadge.tpl'));
 
 				$result = [
 					'success' => true,
@@ -3043,6 +3067,99 @@ class MyAccount_AJAX extends JSON_Action {
 		return $result;
 	}
 
+	/** @noinspection PhpUnused */
+	public function getSavedEvents(){
+		global $interface;
+		global $timer;
+
+		//Load user ratings
+		require_once ROOT_DIR . '/sys/Events/UserEventsEntry.php';
+
+		$page = $_REQUEST['page'] ?? 1;
+		$pageSize = $_REQUEST['pageSize'] ?? 20;
+
+		$eventsFilter = $_REQUEST['eventsFilter'] ?? 'upcoming';
+		$curTime = time();
+
+		$user = UserAccount::getActiveUserObj();
+		$numSaved = $user->getNumSavedEvents($eventsFilter);
+		$event = new UserEventsEntry();
+		$event->userId = UserAccount::getActiveUserId();
+		if ($eventsFilter == 'past'){
+			$event->whereAdd("eventDate < $curTime");
+		}
+		if ($eventsFilter == 'upcoming'){
+			$event->whereAdd("eventDate >= $curTime");
+		}
+		$event->orderBy('eventDate ASC');
+		$event->limit(($page - 1) * $pageSize, $pageSize);
+		$event->find();
+		$events = [];
+		$eventIds = [];
+		while ($event->fetch()) {
+			if (!array_key_exists($event->sourceId, $eventIds)) {
+				$eventIds[$event->sourceId] = clone $event;
+			}
+		}
+		$timer->logTime("Loaded events the user has saved");
+
+		/** @var SearchObject_AbstractGroupedWorkSearcher $searchObject */
+		$searchObject = SearchObjectFactory::initSearchObject("Events");
+		$eventRecords = $searchObject->getRecords(array_keys($eventIds));
+		foreach ($eventIds as $curEventId => $entry) {
+			if (array_key_exists($curEventId, $eventRecords)) {
+				$eventRecordDriver = $eventRecords[$curEventId];
+				if ($eventRecordDriver->isValid()) {
+					if (($entry->eventDate < $curTime)){
+						$events[$entry->sourceId] = [
+							'id' => $entry->id,
+							'sourceId' => $entry->sourceId,
+							'title' => $entry->title,
+							'link' => null,
+							'location' => $entry->location,
+							'regRequired' => $entry->regRequired,
+							'eventDate' => $entry->eventDate,
+							'pastEvent' => true,
+						];
+					}else{
+						$events[$entry->sourceId] = [
+							'id' => $entry->id,
+							'sourceId' => $entry->sourceId,
+							'title' => $entry->title,
+							'link' => $eventRecordDriver->getLinkUrl(),
+							'location' => $entry->location,
+							'regRequired' => $entry->regRequired,
+							'eventDate' => $entry->eventDate,
+							'pastEvent' => false,
+						];
+					}
+				}
+			}
+		}
+
+		$filter = isset($_REQUEST['eventsFilter']) ? $_REQUEST['eventsFilter'] : '';
+		$interface->assign('eventsFilter', $filter);
+
+		// Process Paging
+		$options = [
+			'perPage' => $pageSize,
+			'totalItems' => $numSaved,
+			'append' => false,
+			'filter' => urlencode($filter),
+			'fileName' => "/MyAccount/MyEvents?page=%d&eventsFilter=$eventsFilter",
+		];
+
+		$pager = new Pager($options);
+		$interface->assign('pageLinks', $pager->getLinks());
+		$interface->assign('events', $events);
+
+		$result['success'] = true;
+		$result['message'] = "";
+		$result['myEvents']= $interface->fetch('MyAccount/myEventsList.tpl');
+
+		return $result;
+	}
+
 	public function getReadingHistory() {
 		global $interface;
 		$showCovers = $this->setShowCovers();
@@ -3421,14 +3538,14 @@ class MyAccount_AJAX extends JSON_Action {
 			$currencyCode = $systemVariables->currencyCode;
 		}
 
-		$toLocation = $_REQUEST['toLocation'] ?? $library->libraryId;
-		$donateToLibrary = 'Unknown';
-		if($toLocation) {
+		$donateToLibrary = $_REQUEST['toLocation'];
+		$toLocation = 'None';
+		if($donateToLibrary) {
 			require_once ROOT_DIR . '/sys/LibraryLocation/Location.php';
 			$location = new Location();
-			$location->locationId = $toLocation;
+			$location->displayName = $donateToLibrary;
 			if ($location->find(true)) {
-				$donateToLibrary = $location->displayName;
+				$toLocation = $location->locationId;
 			}
 		} else {
 			$donateToLibrary = 'None';
@@ -3487,6 +3604,27 @@ class MyAccount_AJAX extends JSON_Action {
 				}
 			}
 
+			if (isset($_REQUEST['shouldBeNotified']) && ($_REQUEST['shouldBeNotified'] == "on")) {
+				if (empty($_REQUEST['notificationFirstName'])) {
+					$message .= "<li>A first name for the notification party</li>";
+				}
+				if (empty($_REQUEST['notificationLastName'])) {
+					$message .= '<li>A last name for the notification party</li>';
+				}
+				if (empty($_REQUEST['notificationAddress'])) {
+					$message .= '<li>Address to send notification to</li>';
+				}
+				if (empty($_REQUEST['notificationCity'])) {
+					$message .= '<li>City to send notification to</li>';
+				}
+				if (empty($_REQUEST['notificationState'])) {
+					$message .= '<li>State to send notification to</li>';
+				}
+				if (empty($_REQUEST['notificationZip'])) {
+					$message .= '<li>Zip Code to send notification to</li>';
+				}
+			}
+
 			$message .= "</ul></div>";
 			return [
 				'success' => false,
@@ -3528,6 +3666,7 @@ class MyAccount_AJAX extends JSON_Action {
 			'donateToLibraryId' => $toLocation,
 			'donateToLibrary' => $donateToLibrary,
 			'isDedicated' => isset($_REQUEST['isDedicated']) ? 1 : 0,
+			'shouldBeNotified' => isset($_REQUEST['shouldBeNotified']) ? 1 : 0,
 			'comments' => $comments,
 			'donationSettingId' => $_REQUEST['settingId'],
 		];
@@ -3537,6 +3676,17 @@ class MyAccount_AJAX extends JSON_Action {
 				'type' => $_REQUEST['dedicationType'],
 				'honoreeFirstName' => $_REQUEST['honoreeFirstName'],
 				'honoreeLastName' => $_REQUEST['honoreeLastName'],
+			];
+		}
+
+		if($tempDonation['shouldBeNotified'] == 1) {
+			$tempDonation['notification'] = [
+				'notificationFirstName' => $_REQUEST['notificationFirstName'],
+				'notificationLastName' => $_REQUEST['notificationLastName'],
+				'notificationAddress' => $_REQUEST['notificationAddress'],
+				'notificationCity' => $_REQUEST['notificationCity'],
+				'notificationState' => $_REQUEST['notificationState'],
+				'notificationZip' => $_REQUEST['notificationZip'],
 			];
 		}
 
@@ -3587,7 +3737,17 @@ class MyAccount_AJAX extends JSON_Action {
 			$donation->honoreeFirstName = $tempDonation['dedication']['honoreeFirstName'];
 			$donation->honoreeLastName = $tempDonation['dedication']['honoreeLastName'];
 		}
+		$donation->shouldBeNotified = $tempDonation['shouldBeNotified'];
+		if($tempDonation['shouldBeNotified'] == 1) {
+			$donation->notificationFirstName = $tempDonation['notification']['notificationFirstName'];
+			$donation->notificationLastName = $tempDonation['notification']['notificationLastName'];
+			$donation->notificationAddress = $tempDonation['notification']['notificationAddress'];
+			$donation->notificationCity = $tempDonation['notification']['notificationCity'];
+			$donation->notificationState = $tempDonation['notification']['notificationState'];
+			$donation->notificationZip = $tempDonation['notification']['notificationZip'];
+		}
 		$donation->donateToLibraryId = $tempDonation['donateToLibraryId'];
+		$donation->donateToLibrary = $tempDonation['donateToLibrary'];
 		$donation->comments = $tempDonation['comments'];
 		$donation->donationSettingId = $tempDonation['donationSettingId'];
 		$donation->sendEmailToUser = 1;
@@ -3836,7 +3996,12 @@ class MyAccount_AJAX extends JSON_Action {
 			$payment->paidFromInstance = $library->subdomain;
 
 			if (isset($_REQUEST['token'])) {
-				$payment->aciToken = $_REQUEST['token'];
+				if($paymentType == 'ACI') {
+					$payment->aciToken = $_REQUEST['token'];
+				}
+				if($paymentType == 'deluxe') {
+					$payment->deluxeRemittanceId = $_REQUEST['token'];
+				}
 			}
 
 			$paymentId = $payment->insert();
@@ -4248,7 +4413,7 @@ class MyAccount_AJAX extends JSON_Action {
 			$compriseSettings->id = $paymentLibrary->compriseSettingId;
 			if ($compriseSettings->find(true)) {
 				$paymentRequestUrl = 'https://smartpayapi2.comprisesmartterminal.com/smartpayapi/websmartpay.dll?GetCreditForm';
-				$paymentRequestUrl .= "&LocationID=" . $compriseSettings->username;
+				$paymentRequestUrl .= "&LocationID=" . $compriseSettings->customerName;
 				$paymentRequestUrl .= "&CustomerID=" . $compriseSettings->customerId;
 				if ($transactionType == 'donation') {
 					$paymentRequestUrl .= "&PatronID=Guest";
@@ -4632,6 +4797,63 @@ class MyAccount_AJAX extends JSON_Action {
 			$paymentRequestUrl .= "&e=" . $patron->email;
 			$paymentRequestUrl .= "&p=" . $patron->phone;
 			$paymentRequestUrl .= "&uid=" . $payment->id;
+
+			return [
+				'success' => true,
+				'message' => 'Redirecting to payment processor',
+				'paymentRequestUrl' => $paymentRequestUrl,
+			];
+		}
+	}
+
+	function createCertifiedPaymentsByDeluxeOrder() {
+		global $configArray;
+
+		$transactionType = $_REQUEST['type'];
+		if ($transactionType == 'donation') {
+			$result = $this->createGenericDonation('deluxe');
+		} else {
+			$result = $this->createGenericOrder('deluxe');
+		}
+		if (array_key_exists('success', $result) && $result['success'] === false) {
+			return $result;
+		} else {
+			/** @noinspection PhpUnusedLocalVariableInspection */
+			if ($transactionType == 'donation') {
+				[
+					$paymentLibrary,
+					$userLibrary,
+					$payment,
+					$purchaseUnits,
+					$patron,
+					$tempDonation,
+				] = $result;
+				$donation = $this->addDonation($payment, $tempDonation);
+			} else {
+				[
+					$paymentLibrary,
+					$userLibrary,
+					$payment,
+					$purchaseUnits,
+					$patron,
+				] = $result;
+			}
+
+			require_once ROOT_DIR . '/sys/ECommerce/CertifiedPaymentsByDeluxeSetting.php';
+			$deluxeSettings = new CertifiedPaymentsByDeluxeSetting();
+			$deluxeSettings->id = $paymentLibrary->deluxeCertifiedPaymentsSettingId;
+			if (!$deluxeSettings->find(true)) {
+				return [
+					'success' => false,
+					'message' => 'Certified Payments by Deluxe settings are not configured correctly for ' . $paymentLibrary->displayName,
+				];
+			}
+
+			$patron->loadContactInformation();
+			$paymentRequestUrl = 'https://www.velocitypayment.com/vrelay/verify.do';
+			if ($deluxeSettings->sandboxMode == 1 || $deluxeSettings->sandboxMode == '1') {
+				$paymentRequestUrl = 'https://demo.velocitypayment.com/vrelay/verify.do';
+			}
 
 			return [
 				'success' => true,
@@ -5262,6 +5484,133 @@ class MyAccount_AJAX extends JSON_Action {
 	}
 
 	/** @noinspection PhpUnused */
+	function saveEvent() {
+		$result = [];
+
+		if (!UserAccount::isLoggedIn()) {
+			$result['success'] = false;
+			$result['message'] = translate([
+				'text' => 'Please login before saving an event.',
+				'isPublicFacing' => true,
+			]);
+		} else {
+			require_once ROOT_DIR . '/services/MyAccount/MyEvents.php';
+			require_once ROOT_DIR . '/sys/Events/UserEventsEntry.php';
+			$result['success'] = true;
+			$sourceId = $_REQUEST['sourceId'];
+
+			$userEventsEntry = new UserEventsEntry();
+			$userEventsEntry->userId = UserAccount::getActiveUserId();
+
+			if (empty($sourceId)) {
+				$result['success'] = false;
+				$result['message'] = translate([
+					'text' => 'Unable to save event, not correctly specified.',
+					'isPublicFacing' => true,
+				]);
+			} else {
+				$userEventsEntry->sourceId = $sourceId;
+
+				if (preg_match('`^communico`', $userEventsEntry->sourceId)){
+					require_once ROOT_DIR . '/RecordDrivers/CommunicoEventRecordDriver.php';
+					$recordDriver = new CommunicoEventRecordDriver($userEventsEntry->sourceId);
+					if ($recordDriver->isValid()) {
+						$title = $recordDriver->getTitle();
+						$userEventsEntry->title = substr($title, 0, 50);
+						$eventDate = $recordDriver->getStartDate();
+						$userEventsEntry->eventDate = $eventDate->getTimestamp();
+						if ($recordDriver->isRegistrationRequired()){
+							$regRequired = 1;
+						}else{
+							$regRequired = 0;
+						}
+						$userEventsEntry->regRequired = $regRequired;
+						$userEventsEntry->location = $recordDriver->getBranch();
+					}
+				} elseif (preg_match('`^libcal`', $userEventsEntry->sourceId)){
+					require_once ROOT_DIR . '/RecordDrivers/SpringshareLibCalEventRecordDriver.php';
+					$recordDriver = new SpringshareLibCalEventRecordDriver($userEventsEntry->sourceId);
+					if ($recordDriver->isValid()) {
+						$title = $recordDriver->getTitle();
+						$userEventsEntry->title = substr($title, 0, 50);
+						$eventDate = $recordDriver->getStartDate();
+						$userEventsEntry->eventDate = $eventDate->getTimestamp();
+						if ($recordDriver->isRegistrationRequired()){
+							$regRequired = 1;
+						}else{
+							$regRequired = 0;
+						}
+						$userEventsEntry->regRequired = $regRequired;
+						$userEventsEntry->location = $recordDriver->getBranch();
+					}
+				} elseif (preg_match('`^lc_`', $userEventsEntry->sourceId)){
+					require_once ROOT_DIR . '/RecordDrivers/LibraryCalendarEventRecordDriver.php';
+					$recordDriver = new LibraryCalendarEventRecordDriver($userEventsEntry->sourceId);
+					if ($recordDriver->isValid()) {
+						$title = $recordDriver->getTitle();
+						$userEventsEntry->title = substr($title, 0, 50);
+						$eventDate = $recordDriver->getStartDate();
+						$userEventsEntry->eventDate = $eventDate->getTimestamp();
+						if ($recordDriver->isRegistrationRequired()){
+							$regRequired = 1;
+						}else{
+							$regRequired = 0;
+						}
+						$userEventsEntry->regRequired = $regRequired;
+						$userEventsEntry->location = $recordDriver->getBranch();
+					}
+				}
+			}
+
+			$existingEntry = false;
+
+			if ($userEventsEntry->find(true)) {
+				$existingEntry = true;
+			}
+			$userEventsEntry->dateAdded = time();
+
+			if ($existingEntry) {
+				$userEventsEntry->update();
+			} else {
+				$userEventsEntry->insert();
+			}
+
+			$result['success'] = true;
+			$result['message'] = translate([
+				'text' => 'This event was saved to your events successfully.',
+				'isPublicFacing' => true,
+			]);
+		}
+
+		return $result;
+	}
+
+	/** @noinspection PhpUnused */
+	function deleteSavedEvent() {
+		$id = $_GET['id'];
+		$result = ['result' => false];
+		if (!UserAccount::isLoggedIn()) {
+			$result['message'] = 'You must be logged in to remove events.';
+		} else {
+			require_once ROOT_DIR . '/sys/Events/UserEventsEntry.php';
+			$userEventsEntry = new UserEventsEntry();
+			$userEventsEntry->sourceId = $id;
+			$userEventsEntry->userId = UserAccount::getActiveUserId();
+			if ($userEventsEntry->find(true)) {
+				$userEventsEntry->delete();
+				$result = [
+					'result' => true,
+					'message' => 'Event successfully removed from your events.',
+				];
+			} else {
+				$result['message'] = 'Sorry, we could not find that event in the system.';
+			}
+		}
+
+		return $result;
+	}
+
+	/** @noinspection PhpUnused */
 	function getSaveToListForm() {
 		global $interface;
 		global $library;
@@ -5372,6 +5721,29 @@ class MyAccount_AJAX extends JSON_Action {
 							if ($list->find(true)) {
 								$userListEntry->title = substr($list->title, 0, 50);
 							}
+						} elseif ($userListEntry->source == 'Events') {
+							if (preg_match('`^communico`', $userListEntry->sourceId)){
+								require_once ROOT_DIR . '/RecordDrivers/CommunicoEventRecordDriver.php';
+								$recordDriver = new CommunicoEventRecordDriver($userListEntry->sourceId);
+								if ($recordDriver->isValid()) {
+									$title = $recordDriver->getTitle();
+									$userListEntry->title = substr($title, 0, 50);
+								}
+							} elseif (preg_match('`^libcal`', $userListEntry->sourceId)){
+								require_once ROOT_DIR . '/RecordDrivers/SpringshareLibCalEventRecordDriver.php';
+								$recordDriver = new SpringshareLibCalEventRecordDriver($userListEntry->sourceId);
+								if ($recordDriver->isValid()) {
+									$title = $recordDriver->getTitle();
+									$userListEntry->title = substr($title, 0, 50);
+								}
+							} elseif (preg_match('`^lc_`', $userListEntry->sourceId)){
+								require_once ROOT_DIR . '/RecordDrivers/LibraryCalendarEventRecordDriver.php';
+								$recordDriver = new LibraryCalendarEventRecordDriver($userListEntry->sourceId);
+								if ($recordDriver->isValid()) {
+									$title = $recordDriver->getTitle();
+									$userListEntry->title = substr($title, 0, 50);
+								}
+							}
 						} elseif ($userListEntry->source == 'OpenArchives') {
 							require_once ROOT_DIR . '/RecordDrivers/OpenArchivesRecordDriver.php';
 							$recordDriver = new OpenArchivesRecordDriver($userListEntry->sourceId);
@@ -5413,10 +5785,17 @@ class MyAccount_AJAX extends JSON_Action {
 							$userObject->update();
 						}
 						$result['success'] = true;
-						$result['message'] = translate([
-							'text' => 'This title was saved to your list successfully.',
-							'isPublicFacing' => true,
-						]);
+						if ($userListEntry->source == 'Events'){
+							$result['message'] = translate([
+								'text' => 'This event was saved to your list successfully.',
+								'isPublicFacing' => true,
+							]);
+						}else{
+							$result['message'] = translate([
+								'text' => 'This title was saved to your list successfully.',
+								'isPublicFacing' => true,
+							]);
+						}
 					}
 				}
 			}

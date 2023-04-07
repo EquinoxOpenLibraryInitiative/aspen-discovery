@@ -3,9 +3,6 @@
 require_once ROOT_DIR . '/sys/DB/DataObject.php';
 
 class User extends DataObject {
-	###START_AUTOCODE
-	/* the code below is auto generated do not remove the above tag */
-
 	public $__table = 'user';                            // table name
 	public $id;                              // int(11)  not_null primary_key auto_increment
 	public $source;
@@ -35,6 +32,7 @@ class User extends DataObject {
 	public $promptForAxis360Email;
 	public $axis360Email;
 	public $preferredLibraryInterface;
+	public $preferredTheme;
 	public $noPromptForUserReviews; //tinyint(1)
 	public $lockedFacets;
 	public $alternateLibraryCard;
@@ -233,16 +231,6 @@ class User extends DataObject {
 			return $this->getRoles();
 		} elseif ($name == 'linkedUsers') {
 			return $this->getLinkedUsers();
-		} elseif ($name == 'materialsRequestReplyToAddress') {
-			if (!isset($this->materialsRequestReplyToAddress)) {
-				$this->getStaffSettings();
-			}
-			return $this->materialsRequestReplyToAddress;
-		} elseif ($name == 'materialsRequestEmailSignature') {
-			if (!isset($this->materialsRequestEmailSignature)) {
-				$this->getStaffSettings();
-			}
-			return $this->materialsRequestEmailSignature;
 		} else {
 			return $this->_data[$name] ?? null;
 		}
@@ -1134,6 +1122,9 @@ class User extends DataObject {
 		}
 		if (isset($_REQUEST['searchPreferenceLanguage'])) {
 			$this->searchPreferenceLanguage = $_REQUEST['searchPreferenceLanguage'];
+		}
+		if (isset($_REQUEST['preferredTheme'])) {
+			$this->preferredTheme = $_REQUEST['preferredTheme'];
 		}
 
 		//Make sure the selected location codes are in the database.
@@ -2539,6 +2530,21 @@ class User extends DataObject {
 		return $this->_numMaterialsRequests;
 	}
 
+	function getNumSavedEvents($eventsFilter) {
+		require_once ROOT_DIR . '/sys/Events/UserEventsEntry.php';
+		$curTime = time();
+
+		$event = new UserEventsEntry();
+		if ($eventsFilter == 'past'){
+			$event->whereAdd("eventDate < $curTime");
+		}
+		if ($eventsFilter == 'upcoming'){
+			$event->whereAdd("eventDate >= $curTime");
+		}
+		$event->whereAdd("userId = {$this->id}");
+		return $event->count();
+	}
+
 	function getNumRatings() {
 		require_once ROOT_DIR . '/sys/LocalEnrichment/UserWorkReview.php';
 
@@ -2771,7 +2777,11 @@ class User extends DataObject {
 
 	/** @noinspection PhpUnused */
 	function getHomeLocationName() {
-		return $this->getHomeLocation()->displayName;
+		if ($this->getHomeLocation() != null) {
+			return $this->getHomeLocation()->displayName;
+		} else {
+			return translate(['text' => 'N/A', 'isPublicFacing' => true]);
+		}
 	}
 
 	function getHomeLocation() {
@@ -3124,6 +3134,7 @@ class User extends DataObject {
 		$sections['ecommerce']->addAction(new AdminAction('Xpress-pay Settings', 'Define Settings for Xpress-pay.', '/Admin/XpressPaySettings'), 'Administer Xpress-pay');
 		$sections['ecommerce']->addAction(new AdminAction('ACI Speedpay Settings', 'Define Settings for ACI Speedpay.', '/Admin/ACISpeedpaySettings'), 'Administer ACI Speedpay');
 		$sections['ecommerce']->addAction(new AdminAction('InvoiceCloud Settings', 'Define Settings for InvoiceCloud.', '/Admin/InvoiceCloudSettings'), 'Administer InvoiceCloud');
+		$sections['ecommerce']->addAction(new AdminAction('Certified Payments by Deluxe Settings', 'Define Settings for Certified Payments by Deluxe.', '/Admin/CertifiedPaymentsByDeluxeSettings'), 'Administer Certified Payments by Deluxe');
 		$sections['ecommerce']->addAction(new AdminAction('Donations Settings', 'Define Settings for Donations.', '/Admin/DonationsSettings'), 'Administer Donations');
 
 		$sections['ils_integration'] = new AdminSection('ILS Integration');
@@ -3314,6 +3325,7 @@ class User extends DataObject {
 			$sections['events'] = new AdminSection('Events');
 			$sections['events']->addAction(new AdminAction('Library Market - Calendar Settings', 'Define collections to be loaded into Aspen Discovery.', '/Events/LMLibraryCalendarSettings'), 'Administer LibraryMarket LibraryCalendar Settings');
 			$sections['events']->addAction(new AdminAction('Springshare - LibCal Settings', 'Define collections to be loaded into Aspen Discovery.', '/Events/SpringshareLibCalSettings'), 'Administer Springshare LibCal Settings');
+			$sections['events']->addAction(new AdminAction('Communico Settings', 'Define collections to be loaded into Aspen Discovery.', '/Events/CommunicoSettings'), 'Administer Communico Settings');
 			$sections['events']->addAction(new AdminAction('Indexing Log', 'View the indexing log for Events.', '/Events/IndexingLog'), [
 				'View System Reports',
 				'View Indexing Logs',

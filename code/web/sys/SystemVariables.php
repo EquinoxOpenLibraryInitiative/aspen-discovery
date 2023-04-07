@@ -20,12 +20,15 @@ class SystemVariables extends DataObject {
 	public $indexVersion;
 	public $searchVersion;
 	public $greenhouseUrl;
+	public $communityContentUrl;
 	public $libraryToUseForPayments;
 	public $solrConnectTimeout;
 	public $solrQueryTimeout;
 	public $catalogStatus;
 	public $offlineMessage;
 	public $appScheme;
+	public $googleBucket;
+	public $trackIpAddresses;
 
 	static function getObjectStructure($context = ''): array {
 		return [
@@ -39,7 +42,14 @@ class SystemVariables extends DataObject {
 				'property' => 'greenhouseUrl',
 				'type' => 'url',
 				'label' => 'Greenhouse URL',
-				'description' => 'URL of the Greenhouse to store shared content',
+				'description' => 'URL of the Greenhouse for LiDA connections and system health reporting',
+				'maxLength' => 128,
+			],
+			'communityContentUrl' => [
+				'property' => 'communityContentUrl',
+				'type' => 'url',
+				'label' => 'Community Content URL',
+				'description' => 'URL of the community content server',
 				'maxLength' => 128,
 			],
 			'errorEmail' => [
@@ -157,14 +167,6 @@ class SystemVariables extends DataObject {
 						'description' => 'Whether or not covers can be loaded from the 020z',
 						'default' => false,
 					],
-					'includePersonalAndCorporateNamesInTopics' => [
-						'property' => 'includePersonalAndCorporateNamesInTopics',
-						'type' => 'checkbox',
-						'label' => 'Include Personal And Corporate Names In Topics Facet',
-						'description' => 'Whether or not personal and corporate names are included in the topics facet',
-						'default' => true,
-						'forcesReindex' => true,
-					],
 				],
 			],
 
@@ -244,6 +246,13 @@ class SystemVariables extends DataObject {
 				'label' => 'App Scheme',
 				'description' => 'Scheme used for creating deep links into the app',
 			],
+			'trackIpAddresses' => [
+				'property' => 'trackIpAddresses',
+				'type' => 'checkbox',
+				'label' => 'Track IP Addresses',
+				'description' => 'Determine if IP Addresses should be tracked for each page view',
+				'default' => false,
+			],
 		];
 	}
 
@@ -271,5 +280,14 @@ class SystemVariables extends DataObject {
 			}
 		}
 		return SystemVariables::$_systemVariables;
+	}
+
+	public function update($context = '') {
+		if ($this->trackIpAddresses == 0) {
+			//Delete all previously stored usage stats.
+			$usageByIP = new UsageByIPAddress();
+			$usageByIP->delete(true);
+		}
+		return parent::update($context);
 	}
 }

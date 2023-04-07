@@ -140,10 +140,6 @@ public class GroupedWorkIndexer {
 	private PreparedStatement updateRecordInDBStmt;
 	private PreparedStatement getHideSubjectsStmt;
 
-//	private PreparedStatement getExistingParentWorksStmt;
-//	private PreparedStatement addParentWorkStmt;
-//	private PreparedStatement deleteParentWorkStmt;
-
 	private final CRC32 checksumCalculator = new CRC32();
 
 	private boolean storeRecordDetailsInSolr = false;
@@ -157,7 +153,6 @@ public class GroupedWorkIndexer {
 	private String treatUnknownLanguageAs = "English";
 	private int indexVersion;
 	private int searchVersion;
-	private boolean includePersonalAndCorporateNamesInTopics;
 
 	public GroupedWorkIndexer(String serverName, Connection dbConn, Ini configIni, boolean fullReindex, boolean clearIndex, BaseIndexingLogEntry logEntry, Logger logger) {
 		this(serverName, dbConn, configIni, fullReindex, clearIndex, false, logEntry, logger);
@@ -191,14 +186,13 @@ public class GroupedWorkIndexer {
 
 		//Check to see if we should store record details in Solr
 		try{
-			PreparedStatement systemVariablesStmt = dbConn.prepareStatement("SELECT storeRecordDetailsInSolr, storeRecordDetailsInDatabase, indexVersion, searchVersion, processEmptyGroupedWorks, includePersonalAndCorporateNamesInTopics from system_variables");
+			PreparedStatement systemVariablesStmt = dbConn.prepareStatement("SELECT storeRecordDetailsInSolr, storeRecordDetailsInDatabase, indexVersion, searchVersion, processEmptyGroupedWorks from system_variables");
 			ResultSet systemVariablesRS = systemVariablesStmt.executeQuery();
 			if (systemVariablesRS.next()){
 				this.storeRecordDetailsInSolr = systemVariablesRS.getBoolean("storeRecordDetailsInSolr");
 				this.storeRecordDetailsInDatabase = systemVariablesRS.getBoolean("storeRecordDetailsInDatabase");
 				this.indexVersion = systemVariablesRS.getInt("indexVersion");
 				this.searchVersion = systemVariablesRS.getInt("searchVersion");
-				this.includePersonalAndCorporateNamesInTopics = systemVariablesRS.getBoolean("includePersonalAndCorporateNamesInTopics");
 				if (fullReindex) {
 					this.processEmptyGroupedWorks = systemVariablesRS.getBoolean("processEmptyGroupedWorks");
 				}
@@ -258,22 +252,22 @@ public class GroupedWorkIndexer {
 			addEditionStmt = dbConn.prepareStatement("INSERT INTO indexed_edition (edition) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
 			getPublisherStmt = dbConn.prepareStatement("SELECT id from indexed_publisher where publisher = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
 			addPublisherStmt = dbConn.prepareStatement("INSERT INTO indexed_publisher (publisher) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
-			getPublicationDateStmt = dbConn.prepareStatement("SELECT id from indexed_publicationDate where publicationDate = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
-			addPublicationDateStmt = dbConn.prepareStatement("INSERT INTO indexed_publicationDate (publicationDate) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
-			getPhysicalDescriptionStmt = dbConn.prepareStatement("SELECT id from indexed_physicalDescription where physicalDescription = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
-			addPhysicalDescriptionStmt = dbConn.prepareStatement("INSERT INTO indexed_physicalDescription (physicalDescription) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
-			getEContentSourceStmt = dbConn.prepareStatement("SELECT id from indexed_eContentSource where eContentSource = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
-			addEContentSourceStmt = dbConn.prepareStatement("INSERT INTO indexed_eContentSource (eContentSource) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
-			getShelfLocationStmt = dbConn.prepareStatement("SELECT id from indexed_shelfLocation where shelfLocation = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
-			addShelfLocationStmt = dbConn.prepareStatement("INSERT INTO indexed_shelfLocation (shelfLocation) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
-			getCallNumberStmt = dbConn.prepareStatement("SELECT id from indexed_callNumber where callNumber = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
-			addCallNumberStmt = dbConn.prepareStatement("INSERT INTO indexed_callNumber (callNumber) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
+			getPublicationDateStmt = dbConn.prepareStatement("SELECT id from indexed_publication_date where publicationDate = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
+			addPublicationDateStmt = dbConn.prepareStatement("INSERT INTO indexed_publication_date (publicationDate) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
+			getPhysicalDescriptionStmt = dbConn.prepareStatement("SELECT id from indexed_physical_description where physicalDescription = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
+			addPhysicalDescriptionStmt = dbConn.prepareStatement("INSERT INTO indexed_physical_description (physicalDescription) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
+			getEContentSourceStmt = dbConn.prepareStatement("SELECT id from indexed_econtent_source where eContentSource = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
+			addEContentSourceStmt = dbConn.prepareStatement("INSERT INTO indexed_econtent_source (eContentSource) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
+			getShelfLocationStmt = dbConn.prepareStatement("SELECT id from indexed_shelf_location where shelfLocation = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
+			addShelfLocationStmt = dbConn.prepareStatement("INSERT INTO indexed_shelf_location (shelfLocation) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
+			getCallNumberStmt = dbConn.prepareStatement("SELECT id from indexed_call_number where callNumber = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
+			addCallNumberStmt = dbConn.prepareStatement("INSERT INTO indexed_call_number (callNumber) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
 			getStatusStmt = dbConn.prepareStatement("SELECT id from indexed_status where status = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
 			addStatusStmt = dbConn.prepareStatement("INSERT INTO indexed_status (status) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
-			getLocationCodeStmt = dbConn.prepareStatement("SELECT id from indexed_locationCode where locationCode = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
-			addLocationCodeStmt = dbConn.prepareStatement("INSERT INTO indexed_locationCode (locationCode) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
-			getSubLocationCodeStmt = dbConn.prepareStatement("SELECT id from indexed_subLocationCode where subLocationCode = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
-			addSubLocationCodeStmt = dbConn.prepareStatement("INSERT INTO indexed_subLocationCode (subLocationCode) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
+			getLocationCodeStmt = dbConn.prepareStatement("SELECT id from indexed_location_code where locationCode = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
+			addLocationCodeStmt = dbConn.prepareStatement("INSERT INTO indexed_location_code (locationCode) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
+			getSubLocationCodeStmt = dbConn.prepareStatement("SELECT id from indexed_sub_location_code where subLocationCode = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
+			addSubLocationCodeStmt = dbConn.prepareStatement("INSERT INTO indexed_sub_location_code (subLocationCode) VALUES (?)", Statement.RETURN_GENERATED_KEYS);
 
 			getExistingRecordInfoForIdentifierStmt = dbConn.prepareStatement("SELECT id, checksum, deleted, UNCOMPRESSED_LENGTH(sourceData) as sourceDataLength FROM ils_records where ilsId = ? and source = ?", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
 			getRecordForIdentifierStmt = dbConn.prepareStatement("SELECT UNCOMPRESS(sourceData) as sourceData FROM ils_records where ilsId = ? and source = ?", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
@@ -281,9 +275,6 @@ public class GroupedWorkIndexer {
 			updateRecordInDBStmt = dbConn.prepareStatement("UPDATE ils_records set checksum = ?, sourceData = COMPRESS(?), lastModified = ?, deleted = 0, suppressedNoMarcAvailable = 0 WHERE id = ?", PreparedStatement.RETURN_GENERATED_KEYS);
 			getHideSubjectsStmt = dbConn.prepareStatement("SELECT subjectNormalized from hide_subject_facets", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
 
-//			getExistingParentWorksStmt = dbConn.prepareStatement("SELECT * FROM grouped_work_parents where childWorkId = ?", ResultSet.TYPE_FORWARD_ONLY, ResultSet.CONCUR_READ_ONLY);
-//			addParentWorkStmt = dbConn.prepareStatement("INSERT INTO grouped_work_parents (childWorkId, parentWorkId) VALUES (?, ?)");
-//			deleteParentWorkStmt = dbConn.prepareStatement("DELETE FROM grouped_work_parents WHERE childWorkId = ? AND parentWorkId = ?");
 		} catch (Exception e){
 			logEntry.incErrors("Could not load statements to get identifiers ", e);
 			this.okToIndex = false;
@@ -340,89 +331,81 @@ public class GroupedWorkIndexer {
 
 		//Initialize processors based on our indexing profiles and the primary identifiers for the records.
 		try {
-			PreparedStatement uniqueIdentifiersStmt = dbConn.prepareStatement("SELECT DISTINCT type FROM grouped_work_primary_identifiers");
-			PreparedStatement getIndexingProfile = dbConn.prepareStatement("SELECT * from indexing_profiles where name = ?");
-			PreparedStatement getSideLoadSettings = dbConn.prepareStatement("SELECT * from sideloads where name = ?");
+			//Don't load these based on the records in the database, base it on the actual indexing profiles defined (otherwise it will not index things the first time)
+			//PreparedStatement uniqueIdentifiersStmt = dbConn.prepareStatement("SELECT DISTINCT type FROM grouped_work_primary_identifiers");
+			PreparedStatement getIndexingProfilesStmt = dbConn.prepareStatement("SELECT * from indexing_profiles");
 
-			ResultSet uniqueIdentifiersRS = uniqueIdentifiersStmt.executeQuery();
+			ResultSet indexingProfilesRS = getIndexingProfilesStmt.executeQuery();
 
-			while (uniqueIdentifiersRS.next()){
-				String curType = uniqueIdentifiersRS.getString("type");
-				getIndexingProfile.setString(1, curType);
-				ResultSet indexingProfileRS = getIndexingProfile.executeQuery();
-				if (indexingProfileRS.next()){
-					String ilsIndexingClassString = indexingProfileRS.getString("indexingClass");
-					IndexingProfile indexingProfile = new IndexingProfile(indexingProfileRS);
-					switch (ilsIndexingClassString) {
-						case "ArlingtonKoha":
-							ilsRecordProcessors.put(curType, new ArlingtonKohaRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "CarlX":
-							ilsRecordProcessors.put(curType, new CarlXRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "III":
-							ilsRecordProcessors.put(curType, new IIIRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "SideLoadedEContent":
-							ilsRecordProcessors.put(curType, new SideLoadedEContentProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "Koha":
-							ilsRecordProcessors.put(curType, new KohaRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "Symphony":
-							ilsRecordProcessors.put(curType, new SymphonyRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "Polaris":
-							ilsRecordProcessors.put(curType, new PolarisRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "Evergreen":
-							ilsRecordProcessors.put(curType, new EvergreenRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "Evolve":
-							ilsRecordProcessors.put(curType, new EvolveRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						case "Folio":
-							ilsRecordProcessors.put(curType, new FolioRecordProcessor(this, curType, dbConn, indexingProfileRS, logger, fullReindex));
-							break;
-						default:
-							logEntry.incErrors("Unknown indexing class " + ilsIndexingClassString);
-							continue;
-					}
-					ilsRecordGroupers.put(curType, new MarcRecordGrouper(serverName, dbConn, indexingProfile, logEntry, logger));
-					if (ilsRecordProcessors.containsKey(curType)){
-						this.treatUnknownAudienceAs = indexingProfileRS.getString("treatUnknownAudienceAs");
-						if ("Unknown".equals(this.treatUnknownAudienceAs)) {
-							treatUnknownAudienceAsUnknown = true;
-						}
-						this.treatUnknownLanguageAs = indexingProfileRS.getString("treatUnknownLanguageAs");
-					}
-				}else if (!curType.equals("cloud_library")  && !curType.equals("hoopla") && !curType.equals("overdrive") && !curType.equals("axis360")) {
-					getSideLoadSettings.setString(1, curType);
-					ResultSet getSideLoadSettingsRS = getSideLoadSettings.executeQuery();
-					if (getSideLoadSettingsRS.next()){
-						String sideLoadIndexingClassString = getSideLoadSettingsRS.getString("indexingClass");
-						if ("SideLoadedEContent".equals(sideLoadIndexingClassString) || "SideLoadedEContentProcessor".equals(sideLoadIndexingClassString)) {
-							SideLoadedEContentProcessor sideloadProcessor = new SideLoadedEContentProcessor(this, curType, dbConn, getSideLoadSettingsRS, logger, fullReindex);
-							sideLoadProcessors.put(curType, sideloadProcessor);
-							sideLoadRecordGroupers.put(curType, new SideLoadedRecordGrouper(serverName, dbConn, sideloadProcessor.getSettings(), logEntry, logger));
-						} else {
-							logEntry.incErrors("Unknown side load processing class " + sideLoadIndexingClassString);
-							getSideLoadSettings.close();
-							getIndexingProfile.close();
-							okToIndex = false;
-							return;
-						}
-					}else{
-						logEntry.addNote("Could not find indexing profile or side load settings for type " + curType);
-					}
-					getSideLoadSettingsRS.close();
+			while (indexingProfilesRS.next()){
+				String ilsIndexingClassString = indexingProfilesRS.getString("indexingClass");
+				String curType = indexingProfilesRS.getString("name");
+				IndexingProfile indexingProfile = new IndexingProfile(indexingProfilesRS);
+				switch (ilsIndexingClassString) {
+					case "ArlingtonKoha":
+						ilsRecordProcessors.put(curType, new ArlingtonKohaRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "CarlX":
+						ilsRecordProcessors.put(curType, new CarlXRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "III":
+						ilsRecordProcessors.put(curType, new IIIRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "SideLoadedEContent":
+						ilsRecordProcessors.put(curType, new SideLoadedEContentProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "Koha":
+						ilsRecordProcessors.put(curType, new KohaRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "Symphony":
+						ilsRecordProcessors.put(curType, new SymphonyRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "Polaris":
+						ilsRecordProcessors.put(curType, new PolarisRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "Evergreen":
+						ilsRecordProcessors.put(curType, new EvergreenRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "Evolve":
+						ilsRecordProcessors.put(curType, new EvolveRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					case "Folio":
+						ilsRecordProcessors.put(curType, new FolioRecordProcessor(this, curType, dbConn, indexingProfilesRS, logger, fullReindex));
+						break;
+					default:
+						logEntry.incErrors("Unknown indexing class " + ilsIndexingClassString);
+						continue;
 				}
-				indexingProfileRS.close();
+				ilsRecordGroupers.put(curType, new MarcRecordGrouper(serverName, dbConn, indexingProfile, logEntry, logger));
+
+				//Load how to treat unknown audiences for the entire indexer, this will be based on the last indexing profile encountered (at least for now since we only have one no big deal)
+				this.treatUnknownAudienceAs = indexingProfilesRS.getString("treatUnknownAudienceAs");
+				if ("Unknown".equals(this.treatUnknownAudienceAs)) {
+					treatUnknownAudienceAsUnknown = true;
+				}
+				this.treatUnknownLanguageAs = indexingProfilesRS.getString("treatUnknownLanguageAs");
 			}
-			uniqueIdentifiersRS.close();
-			uniqueIdentifiersStmt.close();
-			getIndexingProfile.close();
-			getSideLoadSettings.close();
+			indexingProfilesRS.close();
+			getIndexingProfilesStmt.close();
+
+			PreparedStatement getSideLoadSettingsStmt = dbConn.prepareStatement("SELECT * from sideloads");
+			ResultSet getSideLoadSettingsRS = getSideLoadSettingsStmt.executeQuery();
+
+			while (getSideLoadSettingsRS.next()) {
+				String curType = getSideLoadSettingsRS.getString("name");
+				String sideLoadIndexingClassString = getSideLoadSettingsRS.getString("indexingClass");
+				if ("SideLoadedEContent".equals(sideLoadIndexingClassString) || "SideLoadedEContentProcessor".equals(sideLoadIndexingClassString)) {
+					SideLoadedEContentProcessor sideloadProcessor = new SideLoadedEContentProcessor(this, curType, dbConn, getSideLoadSettingsRS, logger, fullReindex);
+					sideLoadProcessors.put(curType, sideloadProcessor);
+					sideLoadRecordGroupers.put(curType, new SideLoadedRecordGrouper(serverName, dbConn, sideloadProcessor.getSettings(), logEntry, logger));
+				} else {
+					logEntry.incErrors("Unknown side load processing class " + sideLoadIndexingClassString);
+					okToIndex = false;
+					return;
+				}
+			}
+			getSideLoadSettingsStmt.close();
+			getSideLoadSettingsRS.close();
 
 		}catch (Exception e){
 			logEntry.incErrors("Error loading record processors for ILS records", e);
@@ -560,8 +543,15 @@ public class GroupedWorkIndexer {
 
 	public synchronized void deleteRecord(String permanentId) {
 		logger.info("Clearing existing work " + permanentId + " from index");
+		//noinspection CommentedOutCode
 		try {
+			if (permanentId.length() < 40) {
+				//Delete both the original id (if less than 40 characters)
+				updateServer.deleteByQuery("id:\"" + permanentId + "\"");
+			}
+
 			if (permanentId.length() >= 37 && permanentId.length() < 40){
+				//Also try padding with spaces if less than 40 characters
 				StringBuilder permanentIdBuilder = new StringBuilder(permanentId);
 				while (permanentIdBuilder.length() < 40){
 					permanentIdBuilder.append(" ");
@@ -576,15 +566,18 @@ public class GroupedWorkIndexer {
 				updateServer.commit(false, false, true);
 			}
 
-			//Delete the work from the database?
-			//TODO: Should we do this or leave a record if it was linked to lists, reading history, etc?
-			//TODO: Add a deleted flag since overdrive will return titles that can no longer be accessed?
-			//TODO: If we restore deleting the grouped work we should clean up enrichment, reading history, etc
-			//We would avoid continually deleting and re-adding?
-			//MDN: leave the grouped work to deal with OverDrive records.  The grouped work will still be active, but
-			//it won't be in search results.
-			//deleteGroupedWorkStmt.setLong(1, groupedWorkId);
-			//deleteGroupedWorkStmt.executeUpdate();
+			/*
+			Delete the work from the database?
+			TODO: Should we do this or leave a record if it was linked to lists, reading history, etc?
+			TODO: Add a deleted flag since overdrive will return titles that can no longer be accessed?
+			TODO: If we restore deleting the grouped work we should clean up enrichment, reading history, etc
+			We would avoid continually deleting and re-adding?
+			MDN: leave the grouped work to deal with OverDrive records.  The grouped work will still be active, but
+			it won't be in search results.*/
+			/*
+			deleteGroupedWorkStmt.setLong(1, groupedWorkId);
+			deleteGroupedWorkStmt.executeUpdate();
+			*/
 
 		} catch (Exception e) {
 			logEntry.incErrors("Error deleting work from index", e);
@@ -613,7 +606,7 @@ public class GroupedWorkIndexer {
 	}
 
 	/**
-	 * This is called from all the indexers so we would like to prevent scheduled works from being processed multiple times.
+	 * This is called from all the indexers, so we would like to prevent scheduled works from being processed multiple times.
 	 * Rather than getting a list of all the scheduled works, we will process up to max works to process by getting the oldest record
 	 * continually, marking it as processed and then processing another.  The exception to this is during the full index
 	 * when we will process everything to ensure that records that have been regrouped will get processed during the full index.
@@ -800,7 +793,7 @@ public class GroupedWorkIndexer {
 				}
 				if (!this.clearIndex && (numWorksProcessed % 5000 == 0)){
 					//Testing shows that regular commits do seem to improve performance.
-					//However, we can't do it too often or we get errors with too many searchers warming.
+					//However, we can't do it too often, or we get errors with too many searchers warming.
 					//This is happening now with the auto commit settings in solrconfig.xml
 					if (numWorksProcessed % 10000 == 0) {
 						try {
@@ -814,7 +807,7 @@ public class GroupedWorkIndexer {
 					logger.debug("Processed " + numWorksProcessed + " grouped works processed.");
 				}
 				if (lastUpdated == null){
-					setLastUpdatedTime.setLong(1, indexStartTime - 1); //Set just before the index started so we don't index multiple times
+					setLastUpdatedTime.setLong(1, indexStartTime - 1); //Set just before the index started, so we don't index multiple times
 					setLastUpdatedTime.setLong(2, id);
 					setLastUpdatedTime.executeUpdate();
 				}
@@ -833,7 +826,7 @@ public class GroupedWorkIndexer {
 	}
 
 	protected void processEmptyGroupedWorks() throws SQLException {
-		PreparedStatement getEmptyGroupedWorksStmt = dbConn.prepareStatement("SELECT grouped_work.id as grouped_work_id, permanent_id, grouping_category, count(grouped_work_records.id) as numRecords FROM grouped_work LEFT JOIN grouped_work_records on grouped_work.id = groupedWorkId GROUP BY permanent_id having numRecords = 0;", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
+		PreparedStatement getEmptyGroupedWorksStmt = dbConn.prepareStatement("SELECT grouped_work.id as grouped_work_id, permanent_id, grouping_category, count(grouped_work_records.id) as numRecords FROM grouped_work LEFT JOIN grouped_work_records on grouped_work.id = groupedWorkId where length(permanent_id) > 36 GROUP BY permanent_id having numRecords = 0;", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
 		PreparedStatement getPrimaryIdentifiersForGroupedWorkStmt = dbConn.prepareStatement("SELECT count(*) as numIdentifiers from grouped_work_primary_identifiers where grouped_work_id = ?", ResultSet.TYPE_FORWARD_ONLY,  ResultSet.CONCUR_READ_ONLY);
 		logEntry.addNote("Starting to process grouped works with no records attached to them.");
 
@@ -842,6 +835,9 @@ public class GroupedWorkIndexer {
 		boolean localRegroupAll = this.regroupAllRecords;
 		setRegroupAllRecords(true);
 		logEntry.addNote("Preparing to process empty grouped works");
+		logEntry.saveResults();
+
+		int numProcessed = 0;
 		while (emptyGroupedWorksRS.next()) {
 			long groupedWorkId = emptyGroupedWorksRS.getLong("grouped_work_id");
 			String permanentId = emptyGroupedWorksRS.getString("permanent_id");
@@ -868,9 +864,14 @@ public class GroupedWorkIndexer {
 					}
 				}
 			}
+			numProcessed++;
+			if (numProcessed % 1000 == 0) {
+				logEntry.addNote("Processed " + numProcessed);
+			}
 		}
 		setRegroupAllRecords(localRegroupAll);
-		logEntry.addNote("Finished processing empty grouped works.");
+		logEntry.addNote("Finished processing empty grouped works, processed " + numProcessed + ".");
+		logEntry.saveResults();
 	}
 
 	public synchronized void processGroupedWork(String permanentId) {
@@ -993,7 +994,7 @@ public class GroupedWorkIndexer {
 					}
 					regroupedIdentifiers.add(recordIdentifier);
 				} else if (!newId.equals(permanentId)) {
-					//The work will be marked as updated and therefore reindexed at the end
+					//The work will be marked as updated and therefore re-indexed at the end
 					//Or just index it now?
 					regroupedIdsToProcess.add(newId);
 					regroupedIdentifiers.add(recordIdentifier);
@@ -1007,7 +1008,7 @@ public class GroupedWorkIndexer {
 			String type = recordIdentifier.getType();
 			String identifier = recordIdentifier.getIdentifier();
 
-			//Make a copy of the grouped work so we can revert if we don't add any records
+			//Make a copy of the grouped work, so we can revert if we don't add any records
 			AbstractGroupedWorkSolr originalWork;
 			try {
 				originalWork = groupedWork.clone();
@@ -1061,12 +1062,6 @@ public class GroupedWorkIndexer {
 				if (inputDocument == null) {
 					logEntry.incErrors("Solr Input document was null for " + groupedWork.getId());
 				} else {
-//					if (groupedWork.hasParentRecords()) {
-//						//Remove edition info and availability toggle since this title should not show in search results
-//						inputDocument.removeField("availability_toggle");
-//						inputDocument.removeField("edition_info");
-//					}
-
 					UpdateResponse response = updateServer.add(inputDocument);
 					if (response == null) {
 						logEntry.incErrors("Error adding Solr record for " + groupedWork.getId() + ", the response was null");
@@ -1111,7 +1106,7 @@ public class GroupedWorkIndexer {
 		}
 
 		try {
-			//mark that the work has been processed so we don't reprocess it later
+			//mark that the work has been processed, so we don't reprocess it later
 			markScheduledWorkProcessedStmt.setString(1, permanentId);
 			markScheduledWorkProcessedStmt.setLong(2, new Date().getTime() / 1000);
 			markScheduledWorkProcessedStmt.executeUpdate();
@@ -1236,8 +1231,6 @@ public class GroupedWorkIndexer {
 				String series = novelistRS.getString("seriesTitle");
 				if (!novelistRS.wasNull()){
 					//Don't clear since there are valid cases when they are different
-					//groupedWork.clearSeriesData();
-					//groupedWork.addSeries(series);
 					String volume = novelistRS.getString("volume");
 					if (novelistRS.wasNull()){
 						volume = "";
@@ -2290,8 +2283,8 @@ public class GroupedWorkIndexer {
 		if (disabledAutoCommitCounter == 1) {
 			try {
 				dbConn.setAutoCommit(false);
-			} catch (SQLException throwables) {
-				logEntry.incErrors("Error disabling auto commit", throwables);
+			} catch (SQLException e) {
+				logEntry.incErrors("Error disabling auto commit", e);
 			}
 		}
 	}
@@ -2301,8 +2294,8 @@ public class GroupedWorkIndexer {
 		if (disabledAutoCommitCounter == 0){
 			try{
 				dbConn.setAutoCommit(true);
-			} catch (SQLException throwables) {
-				logEntry.incErrors("Error enabling auto commit", throwables);
+			} catch (SQLException e) {
+				logEntry.incErrors("Error enabling auto commit", e);
 			}
 		}
 	}
@@ -2364,10 +2357,6 @@ public class GroupedWorkIndexer {
 
 	public void setRegroupAllRecords(boolean regroupAllRecords) {
 		this.regroupAllRecords = regroupAllRecords;
-	}
-
-	public boolean isIncludePersonalAndCorporateNamesInTopics() {
-		return includePersonalAndCorporateNamesInTopics;
 	}
 
 	public enum MarcStatus {

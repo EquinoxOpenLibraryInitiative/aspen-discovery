@@ -33,6 +33,10 @@ h1, h2, h3, h4, h5, .menu-bar-label, .panel-title, label,.browse-category,#brows
 {if !empty($bodyFont)}
 body{ldelim}
     font-family: "{$bodyFont}", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-smooth: always;
+    font-size: 14px;
 {rdelim}
 {/if}
 h1 small, h2 small, h3 small, h4 small, h5 small{ldelim}
@@ -93,6 +97,16 @@ body .container, #home-page-browse-content{ldelim}
     color: {$primaryForegroundColor};
 {rdelim}
 
+#horizontal-search-box .searchSourceHorizontal, #horizontal-search-box .searchTypeHorizontal{ldelim}
+    background-color: {$defaultButtonBackgroundColor};
+    color: {$defaultButtonForegroundColor};
+    border: 1px solid {$defaultButtonBorderColor};
+{rdelim}
+
+#home-search-box .input-group-addon{ldelim}
+	background-color: {$secondaryBackgroundColor};
+{rdelim}
+
 #horizontal-menu-bar-container{ldelim}
     background-color: {$headerBackgroundColor};
     color: {$headerForegroundColor};
@@ -115,38 +129,57 @@ body .container, #home-page-browse-content{ldelim}
     color: {$primaryForegroundColor};
 {rdelim}
 
-.dropdownMenu, #account-menu, #header-menu, .dropdown .dropdown-menu.dropdownMenu{ldelim}
-    background-color: {$menuDropdownBackgroundColor};
-    color: {$menuDropdownForegroundColor};
+#lookfor{ldelim}
+	border-radius: 0;
+	background-color: {$bodyBackgroundColor};
+	color: {$bodyTextColor};
+	border: 1px solid {$bodyTextColor};
+	border-left: 0px;
 {rdelim}
 
-.dropdownMenu a, .dropdownMenu a:visited{ldelim}
-    color: {$menuDropdownForegroundColor};
+#lookfor-label{ldelim}
+	color: {$bodyTextColor};
+{rdelim}
+
+.dropdownMenu, #account-menu, #header-menu, .dropdown .dropdown-menu.dropdownMenu, .dropdown-menu{ldelim}
+    background-color: {$menuDropdownBackgroundColor} !important;
+    color: {$menuDropdownForegroundColor} !important;
+{rdelim}
+
+.dropdownMenu a, .dropdownMenu a:visited, .dropdown-menu li a, .dropdown-menu li a:visited{ldelim}
+    color: {$menuDropdownForegroundColor} !important;
+    background-color: {$menuDropdownBackgroundColor} !important;
+{rdelim}
+
+.dropdownMenu a.btn{ldelim}
+    color: {$defaultButtonForegroundColor} !important;
+    background-color: {$defaultButtonBackgroundColor} !important;
 {rdelim}
 
 .modal-header, .modal-footer{ldelim}
-    background-color: {$modalDialogHeaderFooterBackgroundColor};
-    color: {$modalDialogHeaderFooterForegroundColor};
+    background-color: {$bodyBackgroundColor};
+    color: {$bodyTextColor};
 {rdelim}
 .close, .close:hover, .close:focus{ldelim}
-    color: {$modalDialogHeaderFooterForegroundColor};
+    color: {$bodyTextColor};
 {rdelim}
 .modal-header{ldelim}
-    border-bottom-color: {$modalDialogHeaderFooterBorderColor};
+    border-bottom-color: {$bodyBackgroundColor};
 {rdelim}
 .modal-footer{ldelim}
-    border-top-color: {$modalDialogHeaderFooterBorderColor};
+    border-top-color: {$bodyBackgroundColor};
 {rdelim}
 .modal-content{ldelim}
-    background-color: {$modalDialogBackgroundColor};
-    color: {$modalDialogForegroundColor};
+    background-color: {$bodyBackgroundColor};
+    color: {$bodyTextColor};
 {rdelim}
 
 .exploreMoreBar{ldelim}
     border-color: {$primaryBackgroundColor};
     background: {$primaryBackgroundColor}07;
+    border: 0;
 {rdelim}
-.exploreMoreBar .label-top, .exploreMoreBar .label-top img{ldelim}
+.exploreMoreBar .label-top, #explore-more-bar-placeholder, .exploreMoreBar, .exploreMoreBar .label-top .exploreMoreBarLabel, .exploreMoreBar .label-top, .exploreMoreBar .label-top img{ldelim}
     background-color: {$primaryBackgroundColor};
     color: {$primaryForegroundColor};
 {rdelim}
@@ -270,6 +303,10 @@ body .container, #home-page-browse-content{ldelim}
     {/if}
 {rdelim}
 {/if}
+
+.browse-thumbnail{ldelim}
+	background-color: transparent;
+{rdelim}
 
 {if !empty($buttonRadius)}
 .btn{ldelim}
@@ -397,6 +434,126 @@ body .container, #home-page-browse-content{ldelim}
     {/if}
 {rdelim}
 
+.label{ldelim}
+	font-size: 10px;
+    min-width: 10px;
+    padding: 3px 7px;
+    {if (!empty($badgeBorderRadius))}
+    border-radius: {$badgeBorderRadius};
+    {/if}
+{rdelim}
+
+{* Alerts *}
+.alert-info{ldelim}
+    background-color: {$infoButtonBackgroundColor};
+    border-color: {$infoButtonBorderColor};
+    color: {$infoButtonForegroundColor};
+{rdelim}
+
+.alert-info a{ldelim}
+    color: {$infoButtonForegroundColor} !important;
+    text-decoration: underline;
+{rdelim}
+
+.alert-warning{ldelim}
+    background-color: {$warningButtonBackgroundColor};
+    border-color: {$warningButtonBorderColor};
+    color: {$warningButtonForegroundColor};
+{rdelim}
+
+.alert-warning a{ldelim}
+	color: {$warningButtonForegroundColor} !important;
+	text-decoration: underline;
+{rdelim}
+
+.alert-danger{ldelim}
+    background-color: {$dangerButtonBackgroundColor};
+    border-color: {$dangerButtonBorderColor};
+    color: {$dangerButtonForegroundColor};
+{rdelim}
+
+.alert-danger a{ldelim}
+   color: {$dangerButtonForegroundColor} !important;
+   text-decoration: underline;
+{rdelim}
+
+#system-message-header {ldelim}
+	background-color: {$pageBackgroundColor};
+	color: {$bodyTextColor};
+{rdelim}
+
+{* Forms/Inputs *}
+.form-control {ldelim}
+	background-color: {$bodyBackgroundColor};
+	color: {$bodyTextColor};
+	border: 1px solid {$bodyTextColor};
+	border-radius: {$smallButtonRadius}
+{rdelim}
+
+#horizontal-search-box #lookfor:focus, #horizontal-search-box .searchSourceHorizontal:focus, #horizontal-search-box .searchTypeHorizontal:focus{ldelim}
+	color: {$bodyTextColor};
+	border-color: {$primaryForegroundColor};
+	--webkit-box-shadow: inset 0 1px 1px {$primaryForegroundColor}, 0 0 8px {$primaryForegroundColor}
+	box-shadow: inset 0 1px 1px {$primaryForegroundColor}, 0 0 8px {$primaryForegroundColor}
+{rdelim}
+
+.form-control:focus{ldelim}
+	color: {$linkColor};
+	border-color: {$linkColor};
+	--webkit-box-shadow: inset 0 1px 1px {$linkColor}, 0 0 8px {$linkColor}
+	box-shadow: inset 0 1px 1px {$linkColor}, 0 0 8px {$linkColor}
+{rdelim}
+
+.input-group-addon{ldelim}
+	background-color: {$bodyBackgroundColor};
+	color: {$bodyTextColor};
+	border: 1px solid {$bodyTextColor};
+	border-radius: {$smallButtonRadius}
+{rdelim}
+
+legend{ldelim}
+	color: {$bodyTextColor};
+	border-color: {$bodyTextColor};
+{rdelim}
+
+label{ldelim}
+	font-family: "{$bodyFont}", "Helvetica Neue", Helvetica, Arial, sans-serif;
+{rdelim}
+
+.bootstrap-switch{ldelim}
+	border: 1px solid {$bodyTextColor};
+	border-radius: {$smallButtonRadius}
+{rdelim}
+
+.bootstrap-switch > div > label{ldelim}
+	background-color: {$bodyBackgroundColor};
+	color: {$bodyTextColor};
+{rdelim}
+
+.bootstrap-switch > div > span.bootstrap-switch-default{ldelim}
+	background-color: {$bodyBackgroundColor} !important;
+    color: {$bodyTextColor} !important;
+{rdelim}
+
+.bootstrap-switch > div > span.bootstrap-switch-primary{ldelim}
+	background-color: {$tertiaryBackgroundColor} !important;
+    color: {$tertiaryForegroundColor} !important;
+{rdelim}
+
+.input-group-btn{ldelim}
+	position: relative;
+	font-size: 0;
+	white-space: nowrap;
+{rdelim}
+
+.input-group-btn > .btn {ldelim}
+	border-top-left-radius: 0 !important;
+    border-bottom-left-radius: 0 !important;
+    z-index: 2;
+    margin-left: -1px;
+    border-color: {$bodyTextColor}
+{rdelim}
+
 {* Webbuilder*}
 #webMenuNavBar{ldelim}
     {if !empty($primaryBackgroundColor)}
@@ -412,14 +569,17 @@ body .container, #home-page-browse-content{ldelim}
 {rdelim}
 
 .dropdown-menu{ldelim}
-    background-color: white;
-    {if !empty($bodyTextColor)}
-    color: {$bodyTextColor};
-    {else}
-    color: black;
-    {/if}
+    background-color: {$menuDropdownBackgroundColor};
+    color: {$menuDropdownForegroundColor};
 {rdelim}
 
+.dropdown-menu > li > a:hover, .dropdown-menu > li > a:focus{ldelim}
+    background-color: {$menuDropdownBackgroundColor} !important;
+    color: {$menuDropdownForegroundColor} !important;
+    text-decoration: underline;
+{rdelim}
+
+{* Search Results *}
 .result-label{ldelim}
     color: {$resultLabelColor}
 {rdelim}
@@ -448,6 +608,185 @@ body .container, #home-page-browse-content{ldelim}
 .top-link i:hover{ldelim}
     color: {$tertiaryForegroundColor};
 {rdelim}
+
+#results-sort{ldelim}
+    background-color: {$defaultButtonBackgroundColor};
+    color: {$defaultButtonForegroundColor};
+    border: 1px solid {$defaultButtonBorderColor};
+{rdelim}
+
+.related-manifestation.grouped{ldelim}
+	border-color: {$secondaryForegroundColor};
+{rdelim}
+
+{* Browse Category Carousel *}
+.jcarousel-pagination a{ldelim}
+	border-radius: {$smallButtonRadius};
+	background: {$deselectedBrowseCategoryBackgroundColor};
+	color: {$bodyTextColor};
+	box-shadow: none;
+{rdelim}
+
+.jcarousel-pagination a.active{ldelim}
+	background: {$selectedBrowseCategoryBackgroundColor};
+	color: {$selectedBrowseCategoryForegroundColor};
+	box-shadow: none;
+{rdelim}
+
+#browse-category-picker .jcarousel-control-prev, #browse-category-picker .jcarousel-control-next,.jcarousel-control-prev, .jcarousel-control-next{ldelim}
+	background: {$browseCategoryPanelColor};
+	color: {$bodyTextColor};
+	box-shadow: none;
+	text-shadow: none;
+{rdelim}
+
+#more-browse-results {ldelim}
+	background: {$pageBackgroundColor};
+	color: {$bodyTextColor};
+	box-shadow: none;
+	text-shadow: none;
+{rdelim}
+
+{* Panels / Accordions *}
+.panel{ldelim}
+	background-color: transparent !important;
+	box-shadow: none;
+{rdelim}
+
+.panel.active{ldelim}
+	margin-bottom: .5em !important;
+	border: 1px solid {$openPanelBackgroundColor};
+{rdelim}
+
+.accordion .facetList{ldelim}
+	padding-bottom: 1em;
+{rdelim}
+
+.panel-heading{ldelim}
+	border: 0 !important;
+{rdelim}
+
+.panel-body{ldelim}
+	border-width: 0 !important;
+{rdelim}
+
+.facetTitle{ldelim}
+	border: 0 !important;
+{rdelim}
+
+
+{* Tables *}
+.striped-odd{ldelim}
+	background-color: transparent !important;
+{rdelim}
+
+div.striped > div:nth-child(odd), div.striped > div:nth-child(odd){ldelim}
+	background-color: {$primaryBackgroundColor} !important;
+{rdelim}
+
+{* Tabs *}
+.nav-tabs > li.active > a, .nav-tabs > li.active > a:hover, .nav-tabs > li.active > a:focus, .nav-tabs > li > a:hover{ldelim}
+	background-color: {$primaryBackgroundColor};
+    border-color: {$primaryBackgroundColor} !important;
+    color: {$bodyTextColor}
+{rdelim}
+
+.nav-tabs{ldelim}
+	border-bottom: 1px solid {$primaryBackgroundColor}
+{rdelim}
+
+.nav-tabs{ldelim}
+	border-left: 1px solid {$primaryBackgroundColor};
+	border-right: 1px solid {$primaryBackgroundColor};
+{rdelim}
+
+.tab-content{ldelim}
+	border-left: 1px solid {$primaryBackgroundColor};
+	border-right: 1px solid {$primaryBackgroundColor};
+{rdelim}
+
+{* Syndetics Unbound *}
+.unbound_mega_header, .unbound_header, .unbound_subhead, .unbound_author_name, .unbound_reviews_reviewdby, .unbound_review_by_text, .unbound_reviews_source, .unbound_infotext{ldelim}
+	color: {$bodyTextColor} !important;
+{rdelim}
+
+.unbound_tagblocktable .level2, .unbound_tagblocktable .level1, .unbound_tagblocktable td {ldelim}
+	background-color: {$tertiaryBackgroundColor} !important;
+    border-color: {$tertiaryBackgroundColor} !important;
+    color: {$tertiaryForegroundColor} !important;
+{rdelim}
+
+{* Misc *}
+.well{ldelim}
+	background-color: {$primaryBackgroundColor};
+	border: 1px solid {$secondaryBackgroundColor};
+{rdelim}
+
+.sidebar-label{ldelim}
+	background-color: {$primaryBackgroundColor};
+	color: {$primaryForegroundColor};
+	margin-bottom: .75em;
+{rdelim}
+
+pre{ldelim}
+	background-color: {$primaryBackgroundColor};
+	color: {$primaryForegroundColor};
+{rdelim}
+
+.form-control[disabled], .form-control[readonly], fieldset[disabled] .form-control {
+	background-color: {$primaryBackgroundColor};
+	color: {$primaryForegroundColor};
+	border: 1px solid {$primaryForegroundColor};
+}
+
+.formatCategoryLabel, .share-tools-label{ldelim}
+color: {$bodyTextColor};
+{rdelim}
+
+{* Calendar *}
+.calendar-header-cell{ldelim}
+	background-color: {$primaryBackgroundColor};
+	color: {$primaryForegroundColor};
+	border: 1px solid {$bodyTextColor};
+{rdelim}
+
+.calendar-day-cell{ldelim}
+	border: 1px solid {$bodyTextColor};
+{rdelim}
+
+.calendar-event{ldelim}
+    background-color: {$primaryBackgroundColor};
+{rdelim}
+
+.calendar-event .calendar-event-title a{ldelim}
+	color: {$primaryForegroundColor}
+{rdelim}
+
+{* Accessiblity *}
+{if $themeIsHighContrast}
+	body{ldelim}
+		filter: contrast(1.50);
+	{rdelim}
+
+	*{ldelim}
+        font-size: 10pt;
+        font-size: max(12pt, min(10pt, 22pt));
+        font-size: clamp(10pt, 12pt, 22pt);
+    {rdelim}
+
+	a{ldelim}
+		text-decoration: underline !important;
+		cursor: pointer;
+	{rdelim}
+
+	.modal{ldelim}
+		filter: invert(1);
+	{rdelim}
+
+	#more-details-accordion .panel-body, .itemSummary{ldelim}
+        font-size: 85%;
+    {rdelim}
+{/if}
 
 {$additionalCSS}
 </style>

@@ -30,25 +30,37 @@ abstract class ObjectEditor extends Admin_Admin {
 		$interface->assign('canBatchDelete', $this->canBatchDelete());
 		$interface->assign('showReturnToList', $this->showReturnToList());
 		$interface->assign('showHistoryLinks', $this->showHistoryLinks());
+		$interface->assign('canShareToCommunity', $this->canShareToCommunity());
+		$interface->assign('canFetchFromCommunity', $this->canFetchFromCommunity());
 
 		$interface->assign('objectType', $this->getObjectType());
 		$interface->assign('toolName', $this->getToolName());
 		$interface->assign('initializationJs', $this->getInitializationJs());
 		$interface->assign('initializationAdditionalJs', $this->getInitializationAdditionalJs());
+		$interface->assign('allowSearchingProperties', $this->allowSearchingProperties($structure));
 
 		//Define the structure of the object.
 		$interface->assign('structure', $structure);
 		$objectAction = isset($_REQUEST['objectAction']) ? $_REQUEST['objectAction'] : null;
+		$interface->assign('objectAction', $objectAction);
 		$customListActions = $this->customListActions();
 		$interface->assign('customListActions', $customListActions);
 		if (is_null($objectAction) || $objectAction == 'list') {
 			$this->viewExistingObjects($structure);
-		} elseif (($objectAction == 'save' || $objectAction == 'delete')) {
+		} elseif ($objectAction == 'save' || $objectAction == 'delete') {
 			$this->editObject($objectAction, $structure);
 		} elseif ($objectAction == 'compare') {
 			$this->compareObjects($structure);
 		} elseif ($objectAction == 'history') {
 			$this->showHistory();
+		} elseif ($objectAction == 'copy') {
+			$this->copyObject($structure);
+		} elseif ($objectAction == 'shareForm') {
+			$this->showShareForm($structure);
+		} elseif ($objectAction == 'shareToCommunity') {
+			$this->shareToCommunity($structure);
+		} elseif ($objectAction == 'importFromCommunity') {
+			$this->importFromCommunity($structure);
 		} else {
 			//check to see if a custom action is being called.
 			if (method_exists($this, $objectAction)) {
@@ -233,6 +245,160 @@ abstract class ObjectEditor extends Admin_Admin {
 		$interface->setTemplate('../Admin/propertiesList.tpl');
 	}
 
+	function copyObject($structure) {
+		global $interface;
+		//Viewing an individual record, get the id to show
+		if (isset($_SERVER['HTTP_REFERER'])) {
+			$_SESSION['redirect_location'] = $_SERVER['HTTP_REFERER'];
+		} else {
+			unset($_SESSION['redirect_location']);
+		}
+		if (isset($_REQUEST['sourceId'])) {
+			$id = $_REQUEST['sourceId'];
+			$existingObject = $this->getExistingObjectById($id);
+			if ($existingObject != null) {
+				if ($existingObject->canActiveUserEdit()) {
+					$interface->assign('objectName', $existingObject->__toString());
+					$existingObject->unsetUniquenessFields();
+					if (method_exists($existingObject, 'label')) {
+						$interface->assign('objectName', $existingObject->label());
+					}
+					$this->activeObject = $existingObject;
+				} else {
+					$interface->setTemplate('../Admin/noPermission.tpl');
+					return;
+				}
+			} else {
+				$interface->setTemplate('../Admin/invalidObject.tpl');
+				return;
+			}
+		} else {
+			$interface->setTemplate('../Admin/invalidObject.tpl');
+			return;
+		}
+		$interface->assign('object', $existingObject);
+		//Check to see if the request should be multipart/form-data
+		$contentType = DataObjectUtil::getFormContentType($structure);
+		$interface->assign('contentType', $contentType);
+
+		$interface->assign('additionalObjectActions', $this->getAdditionalObjectActions($existingObject));
+		$interface->setTemplate('../Admin/objectEditor.tpl');
+	}
+
+	function showShareForm($structure) {
+		global $interface;
+		if (isset($_REQUEST['sourceId'])) {
+			$id = $_REQUEST['sourceId'];
+			$existingObject = $this->getExistingObjectById($id);
+			if ($existingObject != null) {
+				if ($existingObject->canActiveUserEdit()) {
+
+					$interface->assign('objectName', $existingObject->__toString());
+					$interface->assign('id', $id);
+					$interface->setTemplate('../Admin/shareForm.tpl');
+				} else {
+					$interface->setTemplate('../Admin/noPermission.tpl');
+				}
+			} else {
+				$interface->setTemplate('../Admin/invalidObject.tpl');
+			}
+		} else {
+			$interface->setTemplate('../Admin/invalidObject.tpl');
+		}
+	}
+
+	function shareToCommunity($structure) {
+		global $interface;
+		//TODO:: Double check permissions
+		if (isset($_REQUEST['sourceId'])) {
+			$id = $_REQUEST['sourceId'];
+			$existingObject = $this->getExistingObjectById($id);
+			if ($existingObject != null) {
+				if ($existingObject->canActiveUserEdit()) {
+
+					$interface->assign('objectName', $existingObject->__toString());
+					$interface->assign('id', $id);
+					$existingObject->prepareForSharingToCommunity();
+					$jsonRepresentation = $existingObject->getJSONString(false, true);
+
+					//Submit to the greenhouse
+					require_once ROOT_DIR . '/sys/SystemVariables.php';
+					$systemVariables = SystemVariables::getSystemVariables();
+					if ($systemVariables && !empty($systemVariables->communityContentUrl)) {
+						require_once ROOT_DIR . '/sys/CurlWrapper.php';
+						$curl = new CurlWrapper();
+						$body = [
+							'name' => $_REQUEST['contentName'],
+							'type' => $this->getObjectType(),
+							'description' => $_REQUEST['contentDescription'],
+							'sharedFrom' => $interface->getVariable('librarySystemName'),
+							'sharedByUserName' => UserAccount::getActiveUserObj()->displayName,
+							'data' => $jsonRepresentation
+						];
+						$response = $curl->curlPostPage($systemVariables->communityContentUrl . '/API/CommunityAPI?method=addSharedContent', $body);
+						header("Location: /{$this->getModule()}/{$this->getToolName()}?objectAction=edit&id=$id");
+						exit;
+					} else {
+						$error = new AspenError('A community sharing URL has not been configured. You can configure it in System Variables.');
+						$interface->setTemplate('../error.tpl');
+					}
+
+				} else {
+					$interface->setTemplate('../Admin/noPermission.tpl');
+				}
+			} else {
+				$interface->setTemplate('../Admin/invalidObject.tpl');
+			}
+		} else {
+			$interface->setTemplate('../Admin/invalidObject.tpl');
+		}
+	}
+
+	function importFromCommunity($structure) {
+		global $interface;
+		//TODO: Double check permissions
+		if (isset($_REQUEST['sourceId'])) {
+			$sourceId = $_REQUEST['sourceId'];
+			$objectType = $_REQUEST['objectType'];
+
+			//Get the raw data from the greenhouse
+			require_once ROOT_DIR . '/sys/SystemVariables.php';
+			$systemVariables = SystemVariables::getSystemVariables();
+			if ($systemVariables && !empty($systemVariables->communityContentUrl)) {
+				require_once ROOT_DIR . '/sys/CurlWrapper.php';
+				$curl = new CurlWrapper();
+				$response = $curl->curlGetPage($systemVariables->communityContentUrl . '/API/CommunityAPI?method=getSharedContent&objectType=' . $objectType . '&objectId=' . $sourceId);
+				$jsonResponse = json_decode($response);
+				if ($jsonResponse->success) {
+					$rawData = json_decode($jsonResponse->rawData, true);
+
+					$objectType = $this->getObjectType();
+					/** @var DataObject $newObject */
+					$newObject = new $objectType;
+					$newObject->loadFromJSON($rawData, [], 'doNotSave');
+					$interface->assign('objectName', $newObject->__toString());
+					$newObject->unsetUniquenessFields();
+					if (method_exists($newObject, 'label')) {
+						$interface->assign('objectName', $newObject->label());
+					}
+					$this->activeObject = $newObject;
+
+					$interface->assign('object', $newObject);
+					//Check to see if the request should be multipart/form-data
+					$contentType = DataObjectUtil::getFormContentType($structure);
+					$interface->assign('contentType', $contentType);
+
+					$interface->assign('additionalObjectActions', $this->getAdditionalObjectActions($newObject));
+					$interface->setTemplate('../Admin/objectEditor.tpl');
+				} else {
+					//TODO: Display error that data could not be loaded
+				}
+			}
+		} else {
+			$interface->setTemplate('../Admin/invalidObject.tpl');
+		}
+	}
+
 	function viewIndividualObject($structure) {
 		global $interface;
 		//Viewing an individual record, get the id to show
@@ -402,7 +568,7 @@ abstract class ObjectEditor extends Admin_Admin {
 	}
 
 	public function canCopy() {
-		return $this->canAddNew();
+		return false;
 	}
 
 	public function canEdit(DataObject $object) {
@@ -857,5 +1023,34 @@ abstract class ObjectEditor extends Admin_Admin {
 
 	public function getContext() : string {
 		return '';
+	}
+
+	public function canShareToCommunity() {
+		return false;
+	}
+
+	public function canFetchFromCommunity() {
+		return false;
+	}
+
+	public function hasCommunityConnection() {
+		//Send the translation to the greenhouse
+		require_once ROOT_DIR . '/sys/SystemVariables.php';
+		$systemVariables = SystemVariables::getSystemVariables();
+		if ($systemVariables && !empty($systemVariables->communityContentUrl)) {
+			return true;
+		} else {
+			return false;
+		}
+	}
+
+	public function allowSearchingProperties($structure) {
+		$hasSections = false;
+		foreach ($structure as $property) {
+			if ($property['type'] == 'section') {
+				$hasSections = true;
+			}
+		}
+		return $hasSections || count($structure) > 6;
 	}
 }
