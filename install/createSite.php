@@ -37,6 +37,7 @@ if (count($_SERVER['argv']) > 1){
 			'library' => $configArray['Site']['sitename'],
 			'title' => $configArray['Site']['title'],
 			'url' => $configArray['Site']['url'],
+			'forceHTTPS' => $configArray['Site']['forceHTTPS'] ?? false,
 			'solrHost' => $configArray['Site']['solrHost'] ?? 'localhost',
 			'solrPort' => $configArray['Site']['solrPort'],
 			'timezone' => $configArray['Site']['timezone'],
@@ -100,6 +101,13 @@ if (!$foundConfig) {
 	$variables['url'] = '';
 	while (empty($variables['url'])) {
 		$variables['url'] = readline("Enter the url where the site will be accessed, e.g., https://demo.aspendiscovery.org or http://demo.localhost > ");
+	}
+
+	$forceHTTPS = readline("Force links to use HTTPS (is site is behind a proxy) (y/N)?");
+	if (empty($forceHTTPS) || ($forceHTTPS != 'Y' && $forceHTTPS != 'y')) {
+    $variables['forceHTTPS'] = false;
+	}else{
+    $variables['forceHTTPS'] = true;
 	}
 
 	$siteOnWindows = readline("Will Aspen run on Windows (y/N)? ");

@@ -105,7 +105,7 @@ class UInterface extends Smarty {
 		} else {
 			$url = $configArray['Site']['url'];
 		}
-		if (isset($_SERVER['HTTPS'])) {
+		if (isset($_SERVER['HTTPS']) || (isset($configArray['Site']['forceHTTPS']) && $configArray['Site']['forceHTTPS'] == true)) {
 			$url = "https://" . $url;
 		} else {
 			$url = "http://" . $url;

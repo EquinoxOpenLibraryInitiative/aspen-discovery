@@ -214,7 +214,7 @@ function readConfig() {
 	// Have to set the instanceName before the transformation of $mainArray['Site']['url'] below.
 
 	if (isset($_SERVER['SERVER_NAME'])) {
-		if (isset($_SERVER['HTTPS'])) {
+		if (isset($_SERVER['HTTPS']) || (isset($mainArray['Site']['forceHTTPS']) && $mainArray['Site']['forceHTTPS'] == true)) {
 			$mainArray['Site']['url'] = "https://" . $_SERVER['SERVER_NAME'];
 		} else {
 			$mainArray['Site']['url'] = "http://" . $_SERVER['SERVER_NAME'];
