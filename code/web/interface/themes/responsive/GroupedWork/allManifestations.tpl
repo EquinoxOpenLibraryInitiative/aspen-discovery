@@ -66,7 +66,7 @@
 						{rdelim});
 						AspenDiscovery.GroupedWork.groupedWorks['{$summId|regex_replace:"/-/" : ""}'] = {ldelim}
 						{foreach $relatedManifestations as $manifestation}
-							'{$manifestation->format|regex_replace:"/'/" : "\'"}': '{$manifestation->getHorizontalFormatDisplayInfo()|regex_replace:"/'/" : "\'"}',
+							'{$manifestation->format|regex_replace:"/'/" : "\'"}': '{$manifestation->getHorizontalFormatDisplayInfo()|regex_replace:"/\\\\\"/" : "\\\\\\\""|regex_replace:"/'/" : "\'"}',
 						{/foreach}
 						{rdelim};
 					</script>
